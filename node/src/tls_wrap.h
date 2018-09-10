@@ -27,7 +27,7 @@
 #include "node.h"
 #include "node_crypto.h"  // SSLWrap
 
-#include "async-wrap.h"
+#include "async_wrap.h"
 #include "env.h"
 #include "stream_wrap.h"
 #include "util.h"
@@ -112,7 +112,7 @@ class TLSWrap : public AsyncWrap,
   static void SSLInfoCallback(const SSL* ssl_, int where, int ret);
   void InitSSL();
   void EncOut();
-  static void EncOutCb(WriteWrap* req_wrap, int status);
+  void EncOutAfterWrite(WriteWrap* req_wrap, int status);
   bool ClearIn();
   void ClearOut();
   void MakePending();
@@ -135,13 +135,12 @@ class TLSWrap : public AsyncWrap,
   uint32_t UpdateWriteQueueSize(uint32_t write_queue_size = 0);
 
   // Resource implementation
-  static void OnAfterWriteImpl(WriteWrap* w, void* ctx);
+  static void OnAfterWriteImpl(WriteWrap* w, int status, void* ctx);
   static void OnAllocImpl(size_t size, uv_buf_t* buf, void* ctx);
   static void OnReadImpl(ssize_t nread,
                          const uv_buf_t* buf,
                          uv_handle_type pending,
                          void* ctx);
-  static void OnAfterWriteSelf(WriteWrap* w, void* ctx);
   static void OnAllocSelf(size_t size, uv_buf_t* buf, void* ctx);
   static void OnReadSelf(ssize_t nread,
                          const uv_buf_t* buf,

@@ -142,7 +142,7 @@ for (const showHidden of [true, false]) {
 // Now do the same checks but from a different context
 for (const showHidden of [true, false]) {
   const ab = vm.runInNewContext('new ArrayBuffer(4)');
-  const dv = vm.runInNewContext('new DataView(ab, 1, 2)', { ab: ab });
+  const dv = vm.runInNewContext('new DataView(ab, 1, 2)', { ab });
   assert.strictEqual(
     util.inspect(ab, showHidden),
     'ArrayBuffer { byteLength: 4 }'
@@ -406,6 +406,8 @@ assert.strictEqual(
 // test positive/negative zero
 assert.strictEqual(util.inspect(0), '0');
 assert.strictEqual(util.inspect(-0), '-0');
+// edge case from check
+assert.strictEqual(util.inspect(-5e-324), '-5e-324');
 
 // test for sparse array
 {
@@ -557,25 +559,31 @@ assert.doesNotThrow(() => {
   assert.strictEqual(util.inspect(x).includes('inspect'), true);
 }
 
-// util.inspect should not display the escaped value of a key.
+// util.inspect should display the escaped value of a key.
 {
   const w = {
     '\\': 1,
     '\\\\': 2,
     '\\\\\\': 3,
     '\\\\\\\\': 4,
+    '\n': 5,
+    '\r': 6
   };
 
   const y = ['a', 'b', 'c'];
-  y['\\\\\\'] = 'd';
+  y['\\\\'] = 'd';
+  y['\n'] = 'e';
+  y['\r'] = 'f';
 
   assert.strictEqual(
     util.inspect(w),
-    '{ \'\\\': 1, \'\\\\\': 2, \'\\\\\\\': 3, \'\\\\\\\\\': 4 }'
+    '{ \'\\\\\': 1, \'\\\\\\\\\': 2, \'\\\\\\\\\\\\\': 3, ' +
+    '\'\\\\\\\\\\\\\\\\\': 4, \'\\n\': 5, \'\\r\': 6 }'
   );
   assert.strictEqual(
     util.inspect(y),
-    '[ \'a\', \'b\', \'c\', \'\\\\\\\': \'d\' ]'
+    '[ \'a\', \'b\', \'c\', \'\\\\\\\\\': \'d\', ' +
+    '\'\\n\': \'e\', \'\\r\': \'f\' ]'
   );
 }
 

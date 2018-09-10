@@ -30,17 +30,10 @@ const stream = require('stream');
 const util = require('util');
 const Timer = process.binding('timer_wrap').Timer;
 const { fixturesDir } = require('./fixtures');
-
-const testRoot = process.env.NODE_TEST_DIR ?
-  fs.realpathSync(process.env.NODE_TEST_DIR) : path.resolve(__dirname, '..');
+const tmpdir = require('./tmpdir');
 
 const noop = () => {};
 
-exports.fixturesDir = fixturesDir;
-
-// Using a `.` prefixed name, which is the convention for "hidden" on POSIX,
-// gets tools to ignore it by default or by simple rules, especially eslint.
-exports.tmpDirName = '.tmp';
 // PORT should match the definition in test/testpy/__init__.py.
 exports.PORT = +process.env.NODE_COMMON_PORT || 12346;
 exports.isWindows = process.platform === 'win32';
@@ -52,6 +45,7 @@ exports.isLinuxPPCBE = (process.platform === 'linux') &&
                        (os.endianness() === 'BE');
 exports.isSunOS = process.platform === 'sunos';
 exports.isFreeBSD = process.platform === 'freebsd';
+exports.isOpenBSD = process.platform === 'openbsd';
 exports.isLinux = process.platform === 'linux';
 exports.isOSX = process.platform === 'darwin';
 
@@ -84,7 +78,7 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
   const async_wrap = process.binding('async_wrap');
 
   process.on('exit', () => {
-    // itterate through handles to make sure nothing crashes
+    // iterate through handles to make sure nothing crashes
     for (const k in initHandles)
       util.inspect(initHandles[k]);
   });
@@ -122,63 +116,6 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
     },
   }).enable();
 }
-
-function rimrafSync(p) {
-  let st;
-  try {
-    st = fs.lstatSync(p);
-  } catch (e) {
-    if (e.code === 'ENOENT')
-      return;
-  }
-
-  try {
-    if (st && st.isDirectory())
-      rmdirSync(p, null);
-    else
-      fs.unlinkSync(p);
-  } catch (e) {
-    if (e.code === 'ENOENT')
-      return;
-    if (e.code === 'EPERM')
-      return rmdirSync(p, e);
-    if (e.code !== 'EISDIR')
-      throw e;
-    rmdirSync(p, e);
-  }
-}
-
-function rmdirSync(p, originalEr) {
-  try {
-    fs.rmdirSync(p);
-  } catch (e) {
-    if (e.code === 'ENOTDIR')
-      throw originalEr;
-    if (e.code === 'ENOTEMPTY' || e.code === 'EEXIST' || e.code === 'EPERM') {
-      const enc = exports.isLinux ? 'buffer' : 'utf8';
-      fs.readdirSync(p, enc).forEach((f) => {
-        if (f instanceof Buffer) {
-          const buf = Buffer.concat([Buffer.from(p), Buffer.from(path.sep), f]);
-          rimrafSync(buf);
-        } else {
-          rimrafSync(path.join(p, f));
-        }
-      });
-      fs.rmdirSync(p);
-    }
-  }
-}
-
-exports.refreshTmpDir = function() {
-  rimrafSync(exports.tmpDir);
-  fs.mkdirSync(exports.tmpDir);
-};
-
-if (process.env.TEST_THREAD_ID) {
-  exports.PORT += process.env.TEST_THREAD_ID * 100;
-  exports.tmpDirName += `.${process.env.TEST_THREAD_ID}`;
-}
-exports.tmpDir = path.join(testRoot, exports.tmpDirName);
 
 let opensslCli = null;
 let inFreeBSDJail = null;
@@ -273,7 +210,7 @@ Object.defineProperty(exports, 'hasFipsCrypto', {
 });
 
 {
-  const localRelative = path.relative(process.cwd(), `${exports.tmpDir}/`);
+  const localRelative = path.relative(process.cwd(), `${tmpdir.path}/`);
   const pipePrefix = exports.isWindows ? '\\\\.\\pipe\\' : localRelative;
   const pipeName = `node-test.${process.pid}.sock`;
   exports.PIPE = path.join(pipePrefix, pipeName);
@@ -314,7 +251,7 @@ exports.childShouldThrowAndAbort = function() {
 
 exports.ddCommand = function(filename, kilobytes) {
   if (exports.isWindows) {
-    const p = path.resolve(exports.fixturesDir, 'create-file.js');
+    const p = path.resolve(fixturesDir, 'create-file.js');
     return `"${process.argv[0]}" "${p}" "${filename}" ${kilobytes * 1024}`;
   } else {
     return `dd if=/dev/zero of="${filename}" bs=1024 count=${kilobytes}`;
@@ -505,7 +442,15 @@ exports.mustCallAtLeast = function(fn, minimum) {
   return _mustCallInner(fn, minimum, 'minimum');
 };
 
+exports.mustCallAsync = function(fn, exact) {
+  return exports.mustCall((...args) => {
+    return Promise.resolve(fn(...args)).then(exports.mustCall((val) => val));
+  }, exact);
+};
+
 function _mustCallInner(fn, criteria = 1, field) {
+  if (process._exiting)
+    throw new Error('Cannot use common.mustCall*() in process exit handler');
   if (typeof fn === 'number') {
     criteria = fn;
     fn = noop;
@@ -535,9 +480,9 @@ function _mustCallInner(fn, criteria = 1, field) {
 }
 
 exports.hasMultiLocalhost = function hasMultiLocalhost() {
-  const TCP = process.binding('tcp_wrap').TCP;
-  const t = new TCP();
-  const ret = t.bind('127.0.0.2', exports.PORT);
+  const { TCP, constants: TCPConstants } = process.binding('tcp_wrap');
+  const t = new TCP(TCPConstants.SOCKET);
+  const ret = t.bind('127.0.0.2', 0);
   t.close();
   return ret === 0;
 };
@@ -548,6 +493,14 @@ exports.fileExists = function(pathname) {
     return true;
   } catch (err) {
     return false;
+  }
+};
+
+exports.skipIfEslintMissing = function() {
+  if (!exports.fileExists(
+    path.join('..', '..', 'tools', 'node_modules', 'eslint')
+  )) {
+    exports.skip('missing ESLint');
   }
 };
 
@@ -579,9 +532,23 @@ exports.canCreateSymLink = function() {
   return true;
 };
 
+exports.getCallSite = function getCallSite(top) {
+  const originalStackFormatter = Error.prepareStackTrace;
+  Error.prepareStackTrace = (err, stack) =>
+    `${stack[0].getFileName()}:${stack[0].getLineNumber()}`;
+  const err = new Error();
+  Error.captureStackTrace(err, top);
+  // with the V8 Error API, the stack is not formatted until it is accessed
+  err.stack;
+  Error.prepareStackTrace = originalStackFormatter;
+  return err.stack;
+};
+
 exports.mustNotCall = function(msg) {
+  const callSite = exports.getCallSite(exports.mustNotCall);
   return function mustNotCall() {
-    assert.fail(msg || 'function should not have been called');
+    assert.fail(
+      `${msg || 'function should not have been called'} at ${callSite}`);
   };
 };
 
@@ -723,7 +690,7 @@ exports.expectsError = function expectsError(fn, settings, exact) {
     settings = fn;
     fn = undefined;
   }
-  const innerFn = exports.mustCall(function(error) {
+  function innerFn(error) {
     assert.strictEqual(error.code, settings.code);
     if ('type' in settings) {
       const type = settings.type;
@@ -756,12 +723,12 @@ exports.expectsError = function expectsError(fn, settings, exact) {
       });
     }
     return true;
-  }, exact);
+  }
   if (fn) {
     assert.throws(fn, innerFn);
     return;
   }
-  return innerFn;
+  return exports.mustCall(innerFn, exact);
 };
 
 exports.skipIfInspectorDisabled = function skipIfInspectorDisabled() {
@@ -776,23 +743,24 @@ exports.skipIf32Bits = function skipIf32Bits() {
   }
 };
 
-const arrayBufferViews = [
-  Int8Array,
-  Uint8Array,
-  Uint8ClampedArray,
-  Int16Array,
-  Uint16Array,
-  Int32Array,
-  Uint32Array,
-  Float32Array,
-  Float64Array,
-  DataView
-];
-
 exports.getArrayBufferViews = function getArrayBufferViews(buf) {
   const { buffer, byteOffset, byteLength } = buf;
 
   const out = [];
+
+  const arrayBufferViews = [
+    Int8Array,
+    Uint8Array,
+    Uint8ClampedArray,
+    Int16Array,
+    Uint16Array,
+    Int32Array,
+    Uint32Array,
+    Float32Array,
+    Float64Array,
+    DataView
+  ];
+
   for (const type of arrayBufferViews) {
     const { BYTES_PER_ELEMENT = 1 } = type;
     if (byteLength % BYTES_PER_ELEMENT === 0) {
@@ -849,32 +817,6 @@ function restoreWritable(name) {
   delete process[name].writeTimes;
 }
 
-function onResolvedOrRejected(promise, callback) {
-  return promise.then((result) => {
-    callback();
-    return result;
-  }, (error) => {
-    callback();
-    throw error;
-  });
-}
-
-function timeoutPromise(error, timeoutMs) {
-  let clearCallback = null;
-  let done = false;
-  const promise = onResolvedOrRejected(new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => reject(error), timeoutMs);
-    clearCallback = () => {
-      if (done)
-        return;
-      clearTimeout(timeout);
-      resolve();
-    };
-  }), () => done = true);
-  promise.clear = clearCallback;
-  return promise;
-}
-
 exports.hijackStdout = hijackStdWritable.bind(null, 'stdout');
 exports.hijackStderr = hijackStdWritable.bind(null, 'stderr');
 exports.restoreStdout = restoreWritable.bind(null, 'stdout');
@@ -887,20 +829,4 @@ exports.firstInvalidFD = function firstInvalidFD() {
     while (fs.fstatSync(++fd));
   } catch (e) {}
   return fd;
-};
-
-exports.fires = function fires(promise, error, timeoutMs) {
-  if (!timeoutMs && util.isNumber(error)) {
-    timeoutMs = error;
-    error = null;
-  }
-  if (!error)
-    error = 'timeout';
-  if (!timeoutMs)
-    timeoutMs = 100;
-  const timeout = timeoutPromise(error, timeoutMs);
-  return Promise.race([
-    onResolvedOrRejected(promise, () => timeout.clear()),
-    timeout
-  ]);
 };

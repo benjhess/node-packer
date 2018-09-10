@@ -23,7 +23,6 @@
 #include "node_internals.h"
 #include "node_stat_watcher.h"
 
-#include "req-wrap.h"
 #include "req-wrap-inl.h"
 #include "string_bytes.h"
 
@@ -540,12 +539,17 @@ static void InternalModuleReadFile(const FunctionCallbackInfo<Value>& args) {
     start = 3;  // Skip UTF-8 BOM.
   }
 
-  Local<String> chars_string =
-      String::NewFromUtf8(env->isolate(),
-                          &chars[start],
-                          String::kNormalString,
-                          offset - start);
-  args.GetReturnValue().Set(chars_string);
+  const size_t size = offset - start;
+  if (size == 0) {
+    args.GetReturnValue().SetEmptyString();
+  } else {
+    Local<String> chars_string =
+        String::NewFromUtf8(env->isolate(),
+                            &chars[start],
+                            String::kNormalString,
+                            size);
+    args.GetReturnValue().Set(chars_string);
+  }
 }
 
 // Used to speed up module loading.  Returns 0 if the path refers to
@@ -947,14 +951,20 @@ static void ReadDir(const FunctionCallbackInfo<Value>& args) {
       name_v[name_idx++] = filename.ToLocalChecked();
 
       if (name_idx >= arraysize(name_v)) {
-        fn->Call(env->context(), names, name_idx, name_v)
-            .ToLocalChecked();
+        MaybeLocal<Value> ret = fn->Call(env->context(), names, name_idx,
+                                         name_v);
+        if (ret.IsEmpty()) {
+          return;
+        }
         name_idx = 0;
       }
     }
 
     if (name_idx > 0) {
-      fn->Call(env->context(), names, name_idx, name_v).ToLocalChecked();
+      MaybeLocal<Value> ret = fn->Call(env->context(), names, name_idx, name_v);
+      if (ret.IsEmpty()) {
+        return;
+      }
     }
 
     args.GetReturnValue().Set(names);
@@ -1514,4 +1524,4 @@ void InitFs(Local<Object> target,
 
 }  // end namespace node
 
-NODE_MODULE_CONTEXT_AWARE_BUILTIN(fs, node::InitFs)
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(fs, node::InitFs)

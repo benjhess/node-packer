@@ -1,5 +1,7 @@
 # Async Hooks
 
+<!--introduced_in=v8.1.0-->
+
 > Stability: 1 - Experimental
 
 The `async_hooks` module provides an API to register callbacks tracking the
@@ -84,7 +86,7 @@ added: v8.1.0
   * `before` {Function} The [`before` callback][].
   * `after` {Function} The [`after` callback][].
   * `destroy` {Function} The [`destroy` callback][].
-* Returns: `{AsyncHook}` Instance used for disabling and enabling hooks
+* Returns: {AsyncHook} Instance used for disabling and enabling hooks
 
 Registers functions to be called for different lifetime events of each async
 operation.
@@ -234,7 +236,7 @@ resource's constructor.
 ```text
 FSEVENTWRAP, FSREQWRAP, GETADDRINFOREQWRAP, GETNAMEINFOREQWRAP, HTTPPARSER,
 JSSTREAM, PIPECONNECTWRAP, PIPEWRAP, PROCESSWRAP, QUERYWRAP, SHUTDOWNWRAP,
-SIGNALWRAP, STATWATCHER, TCPCONNECTWRAP, TCPWRAP, TIMERWRAP, TTYWRAP,
+SIGNALWRAP, STATWATCHER, TCPCONNECTWRAP, TCPSERVER, TCPWRAP, TIMERWRAP, TTYWRAP,
 UDPSENDWRAP, UDPWRAP, WRITEWRAP, ZLIB, SSLCONNECTION, PBKDF2REQUEST,
 RANDOMBYTESREQUEST, TLSWRAP, Timeout, Immediate, TickObject
 ```
@@ -242,10 +244,10 @@ RANDOMBYTESREQUEST, TLSWRAP, Timeout, Immediate, TickObject
 There is also the `PROMISE` resource type, which is used to track `Promise`
 instances and asynchronous work scheduled by them.
 
-Users are be able to define their own `type` when using the public embedder API.
+Users are able to define their own `type` when using the public embedder API.
 
 *Note:* It is possible to have type name collisions. Embedders are encouraged
-to use a unique prefixes, such as the npm package name, to prevent collisions
+to use unique prefixes, such as the npm package name, to prevent collisions
 when listening to the hooks.
 
 ###### `triggerId`
@@ -273,13 +275,13 @@ require('net').createServer((conn) => {}).listen(8080);
 Output when hitting the server with `nc localhost 8080`:
 
 ```console
-TCPWRAP(2): trigger: 1 execution: 1
+TCPSERVERWRAP(2): trigger: 1 execution: 1
 TCPWRAP(4): trigger: 2 execution: 0
 ```
 
-The first `TCPWRAP` is the server which receives the connections.
+The `TCPSERVERWRAP` is the server which receives the connections.
 
-The second `TCPWRAP` is the new connection from the client. When a new
+The `TCPWRAP` is the new connection from the client. When a new
 connection is made the `TCPWrap` instance is immediately constructed. This
 happens outside of any JavaScript stack (side note: a `executionAsyncId()` of `0`
 means it's being executed from C++, with no JavaScript stack above it).
@@ -352,7 +354,7 @@ require('net').createServer(() => {}).listen(8080, () => {
 Output from only starting the server:
 
 ```console
-TCPWRAP(2): trigger: 1 execution: 1
+TCPSERVERWRAP(2): trigger: 1 execution: 1
 TickObject(3): trigger: 2 execution: 1
 before:  3
   Timeout(4): trigger: 3 execution: 3
@@ -385,7 +387,7 @@ Only using `execution` to graph resource allocation results in the following:
 TTYWRAP(6) -> Timeout(4) -> TIMERWRAP(5) -> TickObject(3) -> root(1)
 ```
 
-The `TCPWRAP` is not part of this graph, even though it was the reason for
+The `TCPSERVERWRAP` is not part of this graph, even though it was the reason for
 `console.log()` being called. This is because binding to a port without a
 hostname is a *synchronous* operation, but to maintain a completely asynchronous
 API the user's callback is placed in a `process.nextTick()`.
@@ -468,6 +470,14 @@ init for PROMISE with id 6, trigger id: 5  # the Promise returned by then()
 
 #### `async_hooks.executionAsyncId()`
 
+<!-- YAML
+added: v8.1.0
+changes:
+  - version: v8.2.0
+    pr-url: https://github.com/nodejs/node/pull/13490
+    description: Renamed from currentId
+-->
+
 * Returns: {number} The `asyncId` of the current execution context. Useful to
   track when something calls.
 
@@ -482,9 +492,8 @@ fs.open(path, 'r', (err, fd) => {
 });
 ```
 
-It is important to note that the ID returned fom `executionAsyncId()` is related
-to execution timing, not causality (which is covered by `triggerAsyncId()`). For
-example:
+The ID returned from `executionAsyncId()` is related to execution timing, not
+causality (which is covered by `triggerAsyncId()`). For example:
 
 ```js
 const server = net.createServer(function onConnection(conn) {
@@ -499,6 +508,9 @@ const server = net.createServer(function onConnection(conn) {
   async_hooks.executionAsyncId();
 });
 ```
+
+Note that promise contexts may not get precise executionAsyncIds by default.
+See the section on [promise execution tracking][].
 
 #### `async_hooks.triggerAsyncId()`
 
@@ -522,9 +534,60 @@ const server = net.createServer((conn) => {
 });
 ```
 
+Note that promise contexts may not get valid triggerAsyncIds by default. See
+the section on [promise execution tracking][].
+
+## Promise execution tracking
+
+By default, promise executions are not assigned asyncIds due to the relatively
+expensive nature of the [promise introspection API][PromiseHooks] provided by
+V8. This means that programs using promises or `async`/`await` will not get
+correct execution and trigger ids for promise callback contexts by default.
+
+Here's an example:
+
+```js
+const ah = require('async_hooks');
+Promise.resolve(1729).then(() => {
+  console.log(`eid ${ah.executionAsyncId()} tid ${ah.triggerAsyncId()}`);
+});
+// produces:
+// eid 1 tid 0
+```
+
+Observe that the `then` callback claims to have executed in the context of the
+outer scope even though there was an asynchronous hop involved. Also note that
+the triggerAsyncId value is 0, which means that we are missing context about the
+resource that caused (triggered) the `then` callback to be executed.
+
+Installing async hooks via `async_hooks.createHook` enables promise execution
+tracking. Example:
+
+```js
+const ah = require('async_hooks');
+ah.createHook({ init() {} }).enable(); // forces PromiseHooks to be enabled.
+Promise.resolve(1729).then(() => {
+  console.log(`eid ${ah.executionAsyncId()} tid ${ah.triggerAsyncId()}`);
+});
+// produces:
+// eid 7 tid 6
+```
+
+In this example, adding any actual hook function enabled the tracking of
+promises. There are two promises in the example above; the promise created by
+`Promise.resolve()` and the promise returned by the call to `then`. In the
+example above, the first promise got the asyncId 6 and the latter got asyncId 7.
+During the execution of the `then` callback, we are executing in the context of
+promise with asyncId 7. This promise was triggered by async resource 6.
+
+Another subtlety with promises is that `before` and `after` callbacks are run
+only on chained promises. That means promises not created by `then`/`catch` will
+not have the `before` and `after` callbacks fired on them. For more details see
+the details of the V8 [PromiseHooks][] API.
+
 ## JavaScript Embedder API
 
-Library developers that handle their own asychronous resources performing tasks
+Library developers that handle their own asynchronous resources performing tasks
 like I/O, connection pooling, or managing callback queues may use the `AsyncWrap`
 JavaScript API so that all the appropriate callbacks are called.
 
@@ -536,19 +599,21 @@ own resources.
 
 The `init` hook will trigger when an `AsyncResource` is instantiated.
 
-*Note*: It is important that `before`/`after` calls are unwound
-in the same order they are called. Otherwise an unrecoverable exception
-will occur and the process will abort.
+*Note*: `before` and `after` calls must be unwound in the same order that they
+are called. Otherwise, an unrecoverable exception will occur and the process
+will abort.
 
 The following is an overview of the `AsyncResource` API.
 
 ```js
-const { AsyncResource } = require('async_hooks');
+const { AsyncResource, executionAsyncId } = require('async_hooks');
 
 // AsyncResource() is meant to be extended. Instantiating a
 // new AsyncResource() also triggers init. If triggerAsyncId is omitted then
 // async_hook.executionAsyncId() is used.
-const asyncResource = new AsyncResource(type, triggerAsyncId);
+const asyncResource = new AsyncResource(
+  type, { triggerAsyncId: executionAsyncId(), requireManualDestroy: false }
+);
 
 // Call AsyncHooks before callbacks.
 asyncResource.emitBefore();
@@ -566,11 +631,17 @@ asyncResource.asyncId();
 asyncResource.triggerAsyncId();
 ```
 
-#### `AsyncResource(type[, triggerAsyncId])`
+#### `AsyncResource(type[, options])`
 
 * `type` {string} The type of async event.
-* `triggerAsyncId` {number} The ID of the execution context that created this
-  async event.
+* `options` {Object}
+  * `triggerAsyncId` {number} The ID of the execution context that created this
+  async event. **Default:** `executionAsyncId()`
+  * `requireManualDestroy` {boolean} Disables automatic `emitDestroy` when the
+  object is garbage collected. This usually does not need to be set (even if
+  `emitDestroy` is called manually), unless the resource's asyncId is retrieved
+  and the sensitive API's `emitDestroy` is called with it.
+  **Default:** `false`
 
 Example usage:
 
@@ -638,3 +709,5 @@ constructor.
 [`destroy` callback]: #async_hooks_destroy_asyncid
 [`init` callback]: #async_hooks_init_asyncid_type_triggerasyncid_resource
 [Hook Callbacks]: #async_hooks_hook_callbacks
+[PromiseHooks]: https://docs.google.com/document/d/1rda3yKGHimKIhg5YeoAmCOtyURgsbTH_qaYR79FELlk
+[promise execution tracking]: #async_hooks_promise_execution_tracking

@@ -77,9 +77,7 @@ var Debug;
 
 /* eslint-disable */
 const strEscapeSequencesRegExp = /[\x00-\x1f\x27\x5c]/;
-const keyEscapeSequencesRegExp = /[\x00-\x1f\x27]/;
 const strEscapeSequencesReplacer = /[\x00-\x1f\x27\x5c]/g;
-const keyEscapeSequencesReplacer = /[\x00-\x1f\x27]/g;
 /* eslint-enable */
 const keyStrRegExp = /^[a-zA-Z_][a-zA-Z_0-9]*$/;
 const colorRegExp = /\u001b\[\d\d?m/g;
@@ -117,34 +115,6 @@ function strEscape(str) {
   for (var i = 0; i < str.length; i++) {
     const point = str.charCodeAt(i);
     if (point === 39 || point === 92 || point < 32) {
-      if (last === i) {
-        result += meta[point];
-      } else {
-        result += `${str.slice(last, i)}${meta[point]}`;
-      }
-      last = i + 1;
-    }
-  }
-  if (last === 0) {
-    result = str;
-  } else if (last !== i) {
-    result += str.slice(last);
-  }
-  return `'${result}'`;
-}
-
-// Escape control characters and single quotes.
-// Note: for performance reasons this is not combined with strEscape
-function keyEscape(str) {
-  if (str.length < 5000 && !keyEscapeSequencesRegExp.test(str))
-    return `'${str}'`;
-  if (str.length > 100)
-    return `'${str.replace(keyEscapeSequencesReplacer, escapeFn)}'`;
-  var result = '';
-  var last = 0;
-  for (var i = 0; i < str.length; i++) {
-    const point = str.charCodeAt(i);
-    if (point === 39 || point < 32) {
       if (last === i) {
         result += meta[point];
       } else {
@@ -617,10 +587,8 @@ function formatValue(ctx, value, recurseTimes, ln) {
 }
 
 function formatNumber(fn, value) {
-  // Format -0 as '-0'. A `value === -0` check won't distinguish 0 from -0.
-  // Using a division check is currently faster than `Object.is(value, -0)`
-  // as of V8 6.1.
-  if (1 / value === -Infinity)
+  // Format -0 as '-0'. Checking `value === -0` won't distinguish 0 from -0.
+  if (Object.is(value, -0))
     return fn('-0', 'number');
   return fn(`${value}`, 'number');
 }
@@ -853,7 +821,7 @@ function formatProperty(ctx, value, recurseTimes, key, array) {
   } else if (keyStrRegExp.test(key)) {
     name = ctx.stylize(key, 'name');
   } else {
-    name = ctx.stylize(keyEscape(key), 'string');
+    name = ctx.stylize(strEscape(key), 'string');
   }
 
   return `${name}: ${str}`;
@@ -1050,10 +1018,6 @@ function _exceptionWithHostPort(err,
   }
   return ex;
 }
-
-// process.versions needs a custom function as some values are lazy-evaluated.
-process.versions[inspect.custom] =
-  () => exports.format(JSON.parse(JSON.stringify(process.versions)));
 
 function callbackifyOnRejected(reason, cb) {
   // `!reason` guard inspired by bluebird (Ref: https://goo.gl/t5IS6M).

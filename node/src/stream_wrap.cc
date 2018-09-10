@@ -20,7 +20,6 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "stream_wrap.h"
-#include "stream_base.h"
 #include "stream_base-inl.h"
 
 #include "env-inl.h"
@@ -29,11 +28,9 @@
 #include "node_buffer.h"
 #include "node_counters.h"
 #include "pipe_wrap.h"
-#include "req-wrap.h"
 #include "req-wrap-inl.h"
 #include "tcp_wrap.h"
 #include "udp_wrap.h"
-#include "util.h"
 #include "util-inl.h"
 
 #include <stdlib.h>  // abort()
@@ -95,7 +92,6 @@ LibuvStreamWrap::LibuvStreamWrap(Environment* env,
                  provider),
       StreamBase(env),
       stream_(stream) {
-  set_after_write_cb({ OnAfterWriteImpl, this });
   set_alloc_cb({ OnAllocImpl, this });
   set_read_cb({ OnReadImpl, this });
 }
@@ -191,7 +187,7 @@ static Local<Object> AcceptHandle(Environment* env, LibuvStreamWrap* parent) {
   Local<Object> wrap_obj;
   UVType* handle;
 
-  wrap_obj = WrapType::Instantiate(env, parent);
+  wrap_obj = WrapType::Instantiate(env, parent, WrapType::SOCKET);
   if (wrap_obj.IsEmpty())
     return Local<Object>();
 
@@ -302,13 +298,13 @@ void LibuvStreamWrap::SetBlocking(const FunctionCallbackInfo<Value>& args) {
 
 int LibuvStreamWrap::DoShutdown(ShutdownWrap* req_wrap) {
   int err;
-  err = uv_shutdown(req_wrap->req(), stream(), AfterShutdown);
+  err = uv_shutdown(req_wrap->req(), stream(), AfterUvShutdown);
   req_wrap->Dispatched();
   return err;
 }
 
 
-void LibuvStreamWrap::AfterShutdown(uv_shutdown_t* req, int status) {
+void LibuvStreamWrap::AfterUvShutdown(uv_shutdown_t* req, int status) {
   ShutdownWrap* req_wrap = ShutdownWrap::from_req(req);
   CHECK_NE(req_wrap, nullptr);
   HandleScope scope(req_wrap->env()->isolate());
@@ -363,9 +359,9 @@ int LibuvStreamWrap::DoWrite(WriteWrap* w,
                         uv_stream_t* send_handle) {
   int r;
   if (send_handle == nullptr) {
-    r = uv_write(w->req(), stream(), bufs, count, AfterWrite);
+    r = uv_write(w->req(), stream(), bufs, count, AfterUvWrite);
   } else {
-    r = uv_write2(w->req(), stream(), bufs, count, send_handle, AfterWrite);
+    r = uv_write2(w->req(), stream(), bufs, count, send_handle, AfterUvWrite);
   }
 
   if (!r) {
@@ -386,7 +382,7 @@ int LibuvStreamWrap::DoWrite(WriteWrap* w,
 }
 
 
-void LibuvStreamWrap::AfterWrite(uv_write_t* req, int status) {
+void LibuvStreamWrap::AfterUvWrite(uv_write_t* req, int status) {
   WriteWrap* req_wrap = WriteWrap::from_req(req);
   CHECK_NE(req_wrap, nullptr);
   HandleScope scope(req_wrap->env()->isolate());
@@ -395,12 +391,12 @@ void LibuvStreamWrap::AfterWrite(uv_write_t* req, int status) {
 }
 
 
-void LibuvStreamWrap::OnAfterWriteImpl(WriteWrap* w, void* ctx) {
-  LibuvStreamWrap* wrap = static_cast<LibuvStreamWrap*>(ctx);
-  wrap->UpdateWriteQueueSize();
+void LibuvStreamWrap::AfterWrite(WriteWrap* w, int status) {
+  StreamBase::AfterWrite(w, status);
+  UpdateWriteQueueSize();
 }
 
 }  // namespace node
 
-NODE_MODULE_CONTEXT_AWARE_BUILTIN(stream_wrap,
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(stream_wrap,
                                   node::LibuvStreamWrap::Initialize)

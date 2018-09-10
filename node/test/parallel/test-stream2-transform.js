@@ -97,6 +97,13 @@ const Transform = require('_stream_transform');
 }
 
 {
+  // Verify transform constructor behavior
+  const pt = Transform();
+
+  assert(pt instanceof Transform);
+}
+
+{
   // Perform a simple transform
   const pt = new Transform();
   pt._transform = function(c, e, cb) {
@@ -168,7 +175,7 @@ const Transform = require('_stream_transform');
 }
 
 {
-  // Verify assymetric transform (expand)
+  // Verify asymmetric transform (expand)
   const pt = new Transform();
 
   // emit each chunk 2 times.
@@ -200,7 +207,7 @@ const Transform = require('_stream_transform');
 }
 
 {
-  // Verify assymetric trasform (compress)
+  // Verify asymmetric transform (compress)
   const pt = new Transform();
 
   // each output is the first char of 3 consecutive chunks,
@@ -211,14 +218,14 @@ const Transform = require('_stream_transform');
     if (!chunk)
       chunk = '';
     const s = chunk.toString();
-    setTimeout(function() {
+    setTimeout(() => {
       this.state += s.charAt(0);
       if (this.state.length === 3) {
         pt.push(Buffer.from(this.state));
         this.state = '';
       }
       cb();
-    }.bind(this), 10);
+    }, 10);
   };
 
   pt._flush = function(cb) {
@@ -255,7 +262,7 @@ const Transform = require('_stream_transform');
 // this tests for a stall when data is written to a full stream
 // that has empty transforms.
 {
-  // Verify compex transform behavior
+  // Verify complex transform behavior
   let count = 0;
   let saved = null;
   const pt = new Transform({ highWaterMark: 3 });

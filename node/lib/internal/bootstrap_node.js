@@ -29,6 +29,7 @@
 
     const _process = NativeModule.require('internal/process');
     _process.setupConfig(NativeModule._source);
+    _process.setupSignalHandlers();
     NativeModule.require('internal/process/warning').setup();
     NativeModule.require('internal/process/next_tick').setup();
     NativeModule.require('internal/process/stdio').setup();
@@ -51,10 +52,10 @@
     _process.setup_cpuUsage();
     _process.setupMemoryUsage();
     _process.setupKillAndExit();
-    _process.setupSignalHandlers();
     if (global.__coverage__)
       NativeModule.require('internal/process/write-coverage').setup();
 
+    NativeModule.require('internal/trace_events_async_hooks').setup();
     NativeModule.require('internal/inspector_async_hook').setup();
     if (process.env.ENCLOSE_IO_USE_ORIGINAL_NODE) {
       delete process.env.ENCLOSE_IO_USE_ORIGINAL_NODE;
@@ -65,11 +66,7 @@
       delete process.env.ENCLOSE_IO_CHDIR;
     }
 
-    // Do not initialize channel in debugger agent, it deletes env variable
-    // and the main thread won't see it.
-    if (process.argv[1] !== '--debug-agent')
-      _process.setupChannel();
-
+    _process.setupChannel();
     _process.setupRawDebug();
 
     const browserGlobals = !process._noBrowserGlobals;
@@ -81,6 +78,13 @@
     // Ensure setURLConstructor() is called before the native
     // URL::ToObject() method is used.
     NativeModule.require('internal/url');
+
+    // On OpenBSD process.execPath will be relative unless we
+    // get the full path before process.execPath is used.
+    if (process.platform === 'openbsd') {
+      const { realpathSync } = NativeModule.require('fs');
+      process.execPath = realpathSync.native(process.execPath);
+    }
 
     Object.defineProperty(process, 'argv0', {
       enumerable: true,
@@ -182,7 +186,7 @@
           const fs = NativeModule.require('fs');
           // read the source
           const filename = Module._resolveFilename(process.argv[1]);
-          var source = fs.readFileSync(filename, 'utf-8');
+          const source = fs.readFileSync(filename, 'utf-8');
           checkScriptSyntax(source, filename);
           process.exit(0);
         }
@@ -228,7 +232,7 @@
           // Read all of stdin - execute it.
           process.stdin.setEncoding('utf8');
 
-          var code = '';
+          let code = '';
           process.stdin.on('data', function(d) {
             code += d;
           });
@@ -327,10 +331,10 @@
   }
 
   function setupInspector(originalConsole, wrappedConsole, Module) {
-    const { addCommandLineAPI, consoleCall } = process.binding('inspector');
-    if (!consoleCall) {
+    if (!process.config.variables.v8_enable_inspector) {
       return;
     }
+    const { addCommandLineAPI, consoleCall } = process.binding('inspector');
     // Setup inspector command line API
     const { makeRequireFunction } = NativeModule.require('internal/module');
     const path = NativeModule.require('path');
@@ -364,16 +368,16 @@
     // Arrays containing hook flags and ids for async_hook calls.
     const { async_hook_fields, async_id_fields } = async_wrap;
     // Internal functions needed to manipulate the stack.
-    const { clearAsyncIdStack, asyncIdStackSize } = async_wrap;
+    const { clearAsyncIdStack } = async_wrap;
     const { kAfter, kExecutionAsyncId,
-            kInitTriggerAsyncId } = async_wrap.constants;
+            kDefaultTriggerAsyncId, kStackLength } = async_wrap.constants;
 
     process._fatalException = function(er) {
       var caught;
 
-      // It's possible that kInitTriggerAsyncId was set for a constructor call
-      // that threw and was never cleared. So clear it now.
-      async_id_fields[kInitTriggerAsyncId] = 0;
+      // It's possible that kDefaultTriggerAsyncId was set for a constructor
+      // call that threw and was never cleared. So clear it now.
+      async_id_fields[kDefaultTriggerAsyncId] = -1;
 
       if (process.domain && process.domain._errorHandler)
         caught = process.domain._errorHandler(er);
@@ -400,9 +404,9 @@
         // Emit the after() hooks now that the exception has been handled.
         if (async_hook_fields[kAfter] > 0) {
           do {
-            NativeModule.require('async_hooks').emitAfter(
+            NativeModule.require('internal/async_hooks').emitAfter(
               async_id_fields[kExecutionAsyncId]);
-          } while (asyncIdStackSize() > 0);
+          } while (async_hook_fields[kStackLength] > 0);
         // Or completely empty the id stack.
         } else {
           clearAsyncIdStack();
@@ -422,7 +426,7 @@
     const versionTypes = icu.getVersion().split(',');
 
     for (var n = 0; n < versionTypes.length; n++) {
-      var name = versionTypes[n];
+      const name = versionTypes[n];
       const version = icu.getVersion(name);
       Object.defineProperty(process.versions, name, {
         writable: false,
@@ -590,7 +594,7 @@
   ];
 
   NativeModule.prototype.compile = function() {
-    var source = NativeModule.getSource(this.id);
+    let source = NativeModule.getSource(this.id);
     source = NativeModule.wrap(source);
 
     this.loading = true;

@@ -4,12 +4,7 @@
     {
       "textRaw": "Performance Timing API",
       "name": "performance_timing_api",
-      "meta": {
-        "added": [
-          "v8.5.0"
-        ],
-        "changes": []
-      },
+      "introduced_in": "v8.5.0",
       "stability": 1,
       "stabilityText": "Experimental",
       "desc": "<p>The Performance Timing API provides an implementation of the\n<a href=\"https://w3c.github.io/performance-timeline/\">W3C Performance Timeline</a> specification. The purpose of the API\nis to support collection of high resolution performance metrics.\nThis is the same Performance API as implemented in modern Web browsers.</p>\n<pre><code class=\"lang-js\">const { performance } = require(&#39;perf_hooks&#39;);\nperformance.mark(&#39;A&#39;);\ndoSomeLongRunningProcess(() =&gt; {\n  performance.mark(&#39;B&#39;);\n  performance.measure(&#39;A to B&#39;, &#39;A&#39;, &#39;B&#39;);\n  const measure = performance.getEntriesByName(&#39;A to B&#39;)[0];\n  console.log(measure.duration);\n  // Prints the number of milliseconds between Mark &#39;A&#39; and Mark &#39;B&#39;\n});\n</code></pre>\n",
@@ -26,6 +21,27 @@
           },
           "desc": "<p>The <code>Performance</code> provides access to performance metric data. A single\ninstance of this class is provided via the <code>performance</code> property.</p>\n",
           "methods": [
+            {
+              "textRaw": "performance.clearEntries(name)",
+              "type": "method",
+              "name": "clearEntries",
+              "meta": {
+                "added": [
+                  "v8.11.2"
+                ],
+                "changes": []
+              },
+              "desc": "<p>Remove all performance entry objects with <code>entryType</code> equal to <code>name</code> from the\nPerformance Timeline.</p>\n",
+              "signatures": [
+                {
+                  "params": [
+                    {
+                      "name": "name"
+                    }
+                  ]
+                }
+              ]
+            },
             {
               "textRaw": "performance.clearFunctions([name])",
               "type": "method",
@@ -57,6 +73,23 @@
                 }
               ],
               "desc": "<p>If <code>name</code> is not provided, removes all <code>PerformanceFunction</code> objects from the\nPerformance Timeline. If <code>name</code> is provided, removes entries with <code>name</code>.</p>\n"
+            },
+            {
+              "textRaw": "performance.clearGC()",
+              "type": "method",
+              "name": "clearGC",
+              "meta": {
+                "added": [
+                  "v8.5.0"
+                ],
+                "changes": []
+              },
+              "desc": "<p>Remove all performance entry objects with <code>entryType</code> equal to <code>gc</code> from the\nPerformance Timeline.</p>\n",
+              "signatures": [
+                {
+                  "params": []
+                }
+              ]
             },
             {
               "textRaw": "performance.clearMarks([name])",
@@ -303,7 +336,7 @@
                   ]
                 }
               ],
-              "desc": "<p>Creates a new <code>PerformanceMeasure</code> entry in the Performance Timeline. A\n<code>PerformanceMeasure</code> is a subclass of <code>PerformanceEntry</code> whose\n<code>performanceEntry.entryType</code> is always <code>&#39;measure&#39;</code>, and whose\n<code>performanceEntry.duration</code> measures the number of milliseconds elapsed since\n<code>startMark</code> and <code>endMark</code>.</p>\n<p>The <code>startMark</code> argument may identify any <em>existing</em> <code>PerformanceMark</code> in the\nthe Performance Timeline, or <em>may</em> identify any of the timestamp properties\nprovided by the <code>PerformanceNodeTiming</code> class. If the named <code>startMark</code> does\nnot exist, then <code>startMark</code> is set to <a href=\"https://w3c.github.io/hr-time/#dom-performance-timeorigin\"><code>timeOrigin</code></a> by default.</p>\n<p>The <code>endMark</code> argument must identify any <em>existing</em> <code>PerformanceMark</code> in the\nthe Performance Timeline or any of the timestamp properties provided by the\n<code>PerformanceNodeTiming</code> class. If the named <code>endMark</code> does not exist, an\nerror will be thrown.</p>\n"
+              "desc": "<p>Creates a new <code>PerformanceMeasure</code> entry in the Performance Timeline. A\n<code>PerformanceMeasure</code> is a subclass of <code>PerformanceEntry</code> whose\n<code>performanceEntry.entryType</code> is always <code>&#39;measure&#39;</code>, and whose\n<code>performanceEntry.duration</code> measures the number of milliseconds elapsed since\n<code>startMark</code> and <code>endMark</code>.</p>\n<p>The <code>startMark</code> argument may identify any <em>existing</em> <code>PerformanceMark</code> in the\nPerformance Timeline, or <em>may</em> identify any of the timestamp properties\nprovided by the <code>PerformanceNodeTiming</code> class. If the named <code>startMark</code> does\nnot exist, then <code>startMark</code> is set to <a href=\"https://w3c.github.io/hr-time/#dom-performance-timeorigin\"><code>timeOrigin</code></a> by default.</p>\n<p>The <code>endMark</code> argument must identify any <em>existing</em> <code>PerformanceMark</code> in the\nPerformance Timeline or any of the timestamp properties provided by the\n<code>PerformanceNodeTiming</code> class. If the named <code>endMark</code> does not exist, an\nerror will be thrown.</p>\n"
             },
             {
               "textRaw": "performance.now()",

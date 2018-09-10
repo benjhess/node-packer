@@ -31,7 +31,7 @@
                 ],
                 "changes": []
               },
-              "desc": "<p>The <code>&#39;close&#39;</code> event is emitted when one of the following occur:</p>\n<ul>\n<li>The <code>rl.close()</code> method is called and the <code>readline.Interface</code> instance has\nrelinquished control over the <code>input</code> and <code>output</code> streams;</li>\n<li>The <code>input</code> stream receives its <code>&#39;end&#39;</code> event;</li>\n<li>The <code>input</code> stream receives <code>&lt;ctrl&gt;-D</code> to signal end-of-transmission (EOT);</li>\n<li>The <code>input</code> stream receives <code>&lt;ctrl&gt;-C</code> to signal <code>SIGINT</code> and there is no\n<code>SIGINT</code> event listener registered on the <code>readline.Interface</code> instance.</li>\n</ul>\n<p>The listener function is called without passing any arguments.</p>\n<p>The <code>readline.Interface</code> instance should be considered to be &quot;finished&quot; once\nthe <code>&#39;close&#39;</code> event is emitted.</p>\n",
+              "desc": "<p>The <code>&#39;close&#39;</code> event is emitted when one of the following occur:</p>\n<ul>\n<li>The <code>rl.close()</code> method is called and the <code>readline.Interface</code> instance has\nrelinquished control over the <code>input</code> and <code>output</code> streams;</li>\n<li>The <code>input</code> stream receives its <code>&#39;end&#39;</code> event;</li>\n<li>The <code>input</code> stream receives <code>&lt;ctrl&gt;-D</code> to signal end-of-transmission (EOT);</li>\n<li>The <code>input</code> stream receives <code>&lt;ctrl&gt;-C</code> to signal <code>SIGINT</code> and there is no\n<code>SIGINT</code> event listener registered on the <code>readline.Interface</code> instance.</li>\n</ul>\n<p>The listener function is called without passing any arguments.</p>\n<p>The <code>readline.Interface</code> instance is finished once the <code>&#39;close&#39;</code> event is\nemitted.</p>\n",
               "params": []
             },
             {
@@ -332,7 +332,7 @@
                   ]
                 }
               ],
-              "desc": "<p>The <code>rl.write()</code> method will write either <code>data</code> or a key sequence  identified\nby <code>key</code> to the <code>output</code>. The <code>key</code> argument is supported only if <code>output</code> is\na <a href=\"tty.html\">TTY</a> text terminal.</p>\n<p>If <code>key</code> is specified, <code>data</code> is ignored.</p>\n<p>When called, <code>rl.write()</code> will resume the <code>input</code> stream if it has been\npaused.</p>\n<p>If the <code>readline.Interface</code> was created with <code>output</code> set to <code>null</code> or\n<code>undefined</code> the <code>data</code> and <code>key</code> are not written.</p>\n<p>For example:</p>\n<pre><code class=\"lang-js\">rl.write(&#39;Delete this!&#39;);\n// Simulate Ctrl+u to delete the line written previously\nrl.write(null, { ctrl: true, name: &#39;u&#39; });\n</code></pre>\n<p><em>Note</em>: The <code>rl.write()</code> method will write the data to the <code>readline</code>\nInterface&#39;s <code>input</code> <em>as if it were provided by the user</em>.</p>\n"
+              "desc": "<p>The <code>rl.write()</code> method will write either <code>data</code> or a key sequence identified\nby <code>key</code> to the <code>output</code>. The <code>key</code> argument is supported only if <code>output</code> is\na <a href=\"tty.html\">TTY</a> text terminal.</p>\n<p>If <code>key</code> is specified, <code>data</code> is ignored.</p>\n<p>When called, <code>rl.write()</code> will resume the <code>input</code> stream if it has been\npaused.</p>\n<p>If the <code>readline.Interface</code> was created with <code>output</code> set to <code>null</code> or\n<code>undefined</code> the <code>data</code> and <code>key</code> are not written.</p>\n<p>For example:</p>\n<pre><code class=\"lang-js\">rl.write(&#39;Delete this!&#39;);\n// Simulate Ctrl+u to delete the line written previously\nrl.write(null, { ctrl: true, name: &#39;u&#39; });\n</code></pre>\n<p><em>Note</em>: The <code>rl.write()</code> method will write the data to the <code>readline</code>\nInterface&#39;s <code>input</code> <em>as if it were provided by the user</em>.</p>\n"
             }
           ]
         }
@@ -352,9 +352,9 @@
             {
               "params": [
                 {
-                  "textRaw": "`stream` {Writable} ",
+                  "textRaw": "`stream` {stream.Writable} ",
                   "name": "stream",
-                  "type": "Writable"
+                  "type": "stream.Writable"
                 },
                 {
                   "textRaw": "`dir` {number} ",
@@ -407,9 +407,9 @@
             {
               "params": [
                 {
-                  "textRaw": "`stream` {Writable} ",
+                  "textRaw": "`stream` {stream.Writable} ",
                   "name": "stream",
-                  "type": "Writable"
+                  "type": "stream.Writable"
                 }
               ]
             },
@@ -461,15 +461,15 @@
                   "textRaw": "`options` {Object} ",
                   "options": [
                     {
-                      "textRaw": "`input` {Readable} The [Readable][] stream to listen to. This option is *required*. ",
+                      "textRaw": "`input` {stream.Readable} The [Readable][] stream to listen to. This option is *required*. ",
                       "name": "input",
-                      "type": "Readable",
+                      "type": "stream.Readable",
                       "desc": "The [Readable][] stream to listen to. This option is *required*."
                     },
                     {
-                      "textRaw": "`output` {Writable} The [Writable][] stream to write readline data to. ",
+                      "textRaw": "`output` {stream.Writable} The [Writable][] stream to write readline data to. ",
                       "name": "output",
-                      "type": "Writable",
+                      "type": "stream.Writable",
                       "desc": "The [Writable][] stream to write readline data to."
                     },
                     {
@@ -547,9 +547,9 @@
             {
               "params": [
                 {
-                  "textRaw": "`stream` {Writable} ",
+                  "textRaw": "`stream` {stream.Writable} ",
                   "name": "stream",
-                  "type": "Writable"
+                  "type": "stream.Writable"
                 },
                 {
                   "textRaw": "`x` {number} ",
@@ -593,9 +593,9 @@
             {
               "params": [
                 {
-                  "textRaw": "`stream` {Readable} ",
+                  "textRaw": "`stream` {stream.Readable} ",
                   "name": "stream",
-                  "type": "Readable"
+                  "type": "stream.Readable"
                 },
                 {
                   "textRaw": "`interface` {readline.Interface} ",
@@ -633,9 +633,9 @@
             {
               "params": [
                 {
-                  "textRaw": "`stream` {Writable} ",
+                  "textRaw": "`stream` {stream.Writable} ",
                   "name": "stream",
-                  "type": "Writable"
+                  "type": "stream.Writable"
                 },
                 {
                   "textRaw": "`dx` {number} ",

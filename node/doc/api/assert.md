@@ -276,7 +276,7 @@ added: v0.1.21
 * `expected` {any}
 * `message` {any}
 * `operator` {string} **Default:** '!='
-* `stackStartFunction` {function} **Default:** `assert.fail`
+* `stackStartFunction` {Function} **Default:** `assert.fail`
 
 Throws an `AssertionError`. If `message` is falsy, the error message is set as
 the values of `actual` and `expected` separated by the provided `operator`.
@@ -299,7 +299,7 @@ assert.fail(1, 2, 'whoops', '>');
 // AssertionError [ERR_ASSERTION]: whoops
 ```
 
-*Note*: Is the last two cases `actual`, `expected`, and `operator` have no
+*Note*: In the last two cases `actual`, `expected`, and `operator` have no
 influence on the error message.
 
 ```js
@@ -337,6 +337,8 @@ argument in callbacks.
 ```js
 const assert = require('assert');
 
+assert.ifError(null);
+// OK
 assert.ifError(0);
 // OK
 assert.ifError(1);
@@ -381,13 +383,13 @@ assert.notDeepEqual(obj1, obj1);
 // AssertionError: { a: { b: 1 } } notDeepEqual { a: { b: 1 } }
 
 assert.notDeepEqual(obj1, obj2);
-// OK, obj1 and obj2 are not deeply equal
+// OK: obj1 and obj2 are not deeply equal
 
 assert.notDeepEqual(obj1, obj3);
 // AssertionError: { a: { b: 1 } } notDeepEqual { a: { b: 1 } }
 
 assert.notDeepEqual(obj1, obj4);
-// OK, obj1 and obj4 are not deeply equal
+// OK: obj1 and obj4 are not deeply equal
 ```
 
 If the values are deeply equal, an `AssertionError` is thrown with a `message`
@@ -629,10 +631,10 @@ For more information, see
 [MDN's guide on equality comparisons and sameness][mdn-equality-guide].
 
 [`Error.captureStackTrace`]: errors.html#errors_error_capturestacktrace_targetobject_constructoropt
-[`Map`]: https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Map
+[`Map`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
 [`Object.is()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/is
 [`RegExp`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_Expressions
-[`Set`]: https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Set
+[`Set`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set
 [`TypeError`]: errors.html#errors_class_typeerror
 [`assert.deepEqual()`]: #assert_assert_deepequal_actual_expected_message
 [`assert.deepStrictEqual()`]: #assert_assert_deepstrictequal_actual_expected_message

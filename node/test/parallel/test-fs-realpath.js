@@ -22,6 +22,7 @@
 'use strict';
 const common = require('../common');
 const fixtures = require('../common/fixtures');
+const tmpdir = require('../common/tmpdir');
 
 const assert = require('assert');
 const fs = require('fs');
@@ -31,9 +32,9 @@ let async_completed = 0;
 let async_expected = 0;
 const unlink = [];
 let skipSymlinks = false;
-const tmpDir = common.tmpDir;
+const tmpDir = tmpdir.path;
 
-common.refreshTmpDir();
+tmpdir.refresh();
 
 let root = '/';
 let assertEqualPath = assert.strictEqual;
@@ -111,7 +112,7 @@ function test_simple_relative_symlink(callback) {
   const entry = `${tmpDir}/symlink`;
   const expected = `${tmpDir}/cycles/root.js`;
   [
-    [entry, `../${common.tmpDirName}/cycles/root.js`]
+    [entry, `../${path.basename(tmpDir)}/cycles/root.js`]
   ].forEach(function(t) {
     try { fs.unlinkSync(t[0]); } catch (e) {}
     console.log('fs.symlinkSync(%j, %j, %j)', t[1], t[0], 'file');
@@ -400,6 +401,8 @@ function test_up_multiple(cb) {
     cleanup();
   }
   setup();
+  const tmpdir = require('../common/tmpdir');
+  tmpdir.refresh();
   fs.mkdirSync(tmp('a'), 0o755);
   fs.mkdirSync(tmp('a/b'), 0o755);
   fs.symlinkSync('..', tmp('a/d'), 'dir');

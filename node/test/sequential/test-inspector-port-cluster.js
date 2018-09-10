@@ -2,6 +2,7 @@
 
 const common = require('../common');
 
+common.crashOnUnhandledRejection();
 common.skipIfInspectorDisabled();
 
 const assert = require('assert');
@@ -21,6 +22,16 @@ function testRunnerMain() {
   let defaultPortCase = spawnMaster({
     execArgv: ['--inspect'],
     workers: [{ expectedPort: 9230 }]
+  });
+
+  spawnMaster({
+    execArgv: ['--inspect=65534'],
+    workers: [
+      { expectedPort: 65535 },
+      { expectedPort: 1024 },
+      { expectedPort: 1025 },
+      { expectedPort: 1026 }
+    ]
   });
 
   let port = debuggerPort + offset++ * 5;
@@ -311,11 +322,11 @@ function workerProcessMain() {
 function spawnMaster({ execArgv, workers, clusterSettings = {} }) {
   return new Promise((resolve) => {
     childProcess.fork(__filename, {
-      env: {
+      env: Object.assign({}, process.env, {
         workers: JSON.stringify(workers),
         clusterSettings: JSON.stringify(clusterSettings),
         testProcess: true
-      },
+      }),
       execArgv
     }).on('exit', common.mustCall((code, signal) => {
       checkExitCode(code, signal);

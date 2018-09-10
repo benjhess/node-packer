@@ -28,7 +28,7 @@ server.listen(0, common.mustCall(() => {
       {
         code: 'ERR_HTTP2_INVALID_HEADER_VALUE',
         type: TypeError,
-        message: 'Value must not be undefined or null'
+        message: 'Invalid value "undefined" for header "test"'
       }
     );
     common.expectsError(
@@ -36,7 +36,7 @@ server.listen(0, common.mustCall(() => {
       {
         code: 'ERR_HTTP2_INVALID_HEADER_VALUE',
         type: TypeError,
-        message: 'Value must not be undefined or null'
+        message: 'Invalid value "null" for header "test"'
       }
     );
     common.expectsError(
@@ -68,7 +68,7 @@ server.listen(0, common.mustCall(() => {
     }));
     request.resume();
     request.on('end', common.mustCall(() => {
-      client.destroy();
+      client.close();
       server.close();
     }));
   }));

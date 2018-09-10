@@ -20,11 +20,9 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "udp_wrap.h"
-#include "env.h"
 #include "env-inl.h"
 #include "node_buffer.h"
 #include "handle_wrap.h"
-#include "req-wrap.h"
 #include "req-wrap-inl.h"
 #include "util.h"
 #include "util-inl.h"
@@ -44,7 +42,7 @@ using v8::Integer;
 using v8::Local;
 using v8::Object;
 using v8::PropertyAttribute;
-using v8::PropertyCallbackInfo;
+using v8::Signature;
 using v8::String;
 using v8::Uint32;
 using v8::Undefined;
@@ -113,12 +111,19 @@ void UDPWrap::Initialize(Local<Object> target,
 
   enum PropertyAttribute attributes =
       static_cast<PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
-  t->PrototypeTemplate()->SetAccessor(env->fd_string(),
-                                      UDPWrap::GetFD,
-                                      nullptr,
-                                      env->as_external(),
-                                      v8::DEFAULT,
-                                      attributes);
+
+  Local<Signature> signature = Signature::New(env->isolate(), t);
+
+  Local<FunctionTemplate> get_fd_templ =
+      FunctionTemplate::New(env->isolate(),
+                            UDPWrap::GetFD,
+                            env->as_external(),
+                            signature);
+
+  t->PrototypeTemplate()->SetAccessorProperty(env->fd_string(),
+                                              get_fd_templ,
+                                              Local<FunctionTemplate>(),
+                                              attributes);
 
   env->SetProtoMethod(t, "bind", Bind);
   env->SetProtoMethod(t, "send", Send);
@@ -166,7 +171,7 @@ void UDPWrap::New(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void UDPWrap::GetFD(Local<String>, const PropertyCallbackInfo<Value>& args) {
+void UDPWrap::GetFD(const FunctionCallbackInfo<Value>& args) {
   int fd = UV_EBADF;
 #if !defined(_WIN32)
   UDPWrap* wrap = Unwrap<UDPWrap>(args.This());
@@ -349,8 +354,12 @@ void UDPWrap::DoSend(const FunctionCallbackInfo<Value>& args, int family) {
   node::Utf8Value address(env->isolate(), args[4]);
   const bool have_callback = args[5]->IsTrue();
 
-  env->set_init_trigger_async_id(wrap->get_async_id());
-  SendWrap* req_wrap = new SendWrap(env, req_wrap_obj, have_callback);
+  SendWrap* req_wrap;
+  {
+    AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(
+      env, wrap->get_async_id());
+    req_wrap = new SendWrap(env, req_wrap_obj, have_callback);
+  }
   size_t msg_size = 0;
 
   MaybeStackBuffer<uv_buf_t, 16> bufs(count);
@@ -495,9 +504,13 @@ void UDPWrap::OnRecv(uv_udp_t* handle,
 }
 
 
-Local<Object> UDPWrap::Instantiate(Environment* env, AsyncWrap* parent) {
+Local<Object> UDPWrap::Instantiate(Environment* env,
+                                   AsyncWrap* parent,
+                                   UDPWrap::SocketType type) {
   EscapableHandleScope scope(env->isolate());
-  AsyncHooks::InitScope init_scope(env, parent->get_async_id());
+  AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(
+    env, parent->get_async_id());
+
   // If this assert fires then Initialize hasn't been called yet.
   CHECK_EQ(env->udp_constructor_function().IsEmpty(), false);
   Local<Object> instance = env->udp_constructor_function()
@@ -513,4 +526,4 @@ uv_udp_t* UDPWrap::UVHandle() {
 
 }  // namespace node
 
-NODE_MODULE_CONTEXT_AWARE_BUILTIN(udp_wrap, node::UDPWrap::Initialize)
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(udp_wrap, node::UDPWrap::Initialize)

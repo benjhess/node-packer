@@ -185,8 +185,8 @@ Possible signatures:
 * [`server.listen([port][, host][, backlog][, callback])`][`server.listen(port, host)`]
   for TCP servers
 
-This function is asynchronous.  When the server starts listening, the
-[`'listening'`][] event will be emitted.  The last parameter `callback`
+This function is asynchronous. When the server starts listening, the
+[`'listening'`][] event will be emitted. The last parameter `callback`
 will be added as a listener for the [`'listening'`][] event.
 
 All `listen()` methods can take a `backlog` parameter to specify the maximum
@@ -281,7 +281,7 @@ server.listen({
 added: v0.1.90
 -->
 
-* `path` {String} Path the server should listen to. See
+* `path` {string} Path the server should listen to. See
   [Identifying paths for IPC connections][].
 * `backlog` {number} Common parameter of [`server.listen()`][] functions.
 * `callback` {Function} Common parameter of [`server.listen()`][] functions.
@@ -420,8 +420,8 @@ added: v0.1.90
 
 * {Buffer}
 
-Emitted when data is received.  The argument `data` will be a `Buffer` or
-`String`.  Encoding of data is set by `socket.setEncoding()`.
+Emitted when data is received. The argument `data` will be a `Buffer` or
+`String`. Encoding of data is set by `socket.setEncoding()`.
 (See the [Readable Stream][] section for more information.)
 
 Note that the **data will be lost** if there is no listener when a `Socket`
@@ -459,7 +459,7 @@ added: v0.1.90
 
 * {Error}
 
-Emitted when an error occurs.  The `'close'` event will be called directly
+Emitted when an error occurs. The `'close'` event will be called directly
 following this event.
 
 ### Event: 'lookup'
@@ -474,9 +474,9 @@ changes:
 Emitted after resolving the hostname but before connecting.
 Not applicable to UNIX sockets.
 
-* `err` {Error|null} The error object.  See [`dns.lookup()`][].
+* `err` {Error|null} The error object. See [`dns.lookup()`][].
 * `address` {string} The IP address.
-* `family` {string|null} The address type.  See [`dns.lookup()`][].
+* `family` {string|null} The address type. See [`dns.lookup()`][].
 * `host` {string} The hostname.
 
 ### Event: 'timeout'
@@ -802,7 +802,7 @@ socket.on('timeout', () => {
 
 If `timeout` is 0, then the existing idle timeout is disabled.
 
-The optional `callback` parameter will be added as a one time listener for the
+The optional `callback` parameter will be added as a one-time listener for the
 [`'timeout'`][] event.
 
 ### socket.unref()
@@ -822,7 +822,7 @@ added: v0.1.90
 -->
 
 Sends data on the socket. The second parameter specifies the encoding in the
-case of a string--it defaults to UTF8 encoding.
+case of a string — it defaults to UTF8 encoding.
 
 Returns `true` if the entire data was flushed successfully to the kernel
 buffer. Returns `false` if all or part of the data was queued in user memory.

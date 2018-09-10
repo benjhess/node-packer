@@ -5,7 +5,7 @@
 > Stability: 2 - Stable
 
 The `crypto` module provides cryptographic functionality that includes a set of
-wrappers for OpenSSL's hash, HMAC, cipher, decipher, sign and verify functions.
+wrappers for OpenSSL's hash, HMAC, cipher, decipher, sign, and verify functions.
 
 Use `require('crypto')` to access this module.
 
@@ -244,7 +244,7 @@ Updates the cipher with `data`. If the `inputEncoding` argument is given,
 its value must be one of `'utf8'`, `'ascii'`, or `'latin1'` and the `data`
 argument is a string using the specified encoding. If the `inputEncoding`
 argument is not given, `data` must be a [`Buffer`][], `TypedArray`, or
-`DataView`.  If `data` is a [`Buffer`][], `TypedArray`, or `DataView`, then
+`DataView`. If `data` is a [`Buffer`][], `TypedArray`, or `DataView`, then
 `inputEncoding` is ignored.
 
 The `outputEncoding` specifies the output format of the enciphered
@@ -368,8 +368,16 @@ changes:
 When using an authenticated encryption mode (only `GCM` is currently
 supported), the `decipher.setAuthTag()` method is used to pass in the
 received _authentication tag_. If no tag is provided, or if the cipher text
-has been tampered with, [`decipher.final()`][] with throw, indicating that the
+has been tampered with, [`decipher.final()`][] will throw, indicating that the
 cipher text should be discarded due to failed authentication.
+
+Note that this Node.js version does not verify the length of GCM authentication
+tags. Such a check *must* be implemented by applications and is crucial to the
+authenticity of the encrypted data, otherwise, an attacker can use an
+arbitrarily short authentication tag to increase the chances of successfully
+passing authentication (up to 0.39%). It is highly recommended to associate one
+of the values 16, 15, 14, 13, 12, 8 or 4 bytes with each key, and to only permit
+authentication tags of that length, see [NIST SP 800-38D][].
 
 The `decipher.setAuthTag()` method must be called before
 [`decipher.final()`][].
@@ -487,7 +495,7 @@ added: v0.5.0
 - `encoding` {string}
 
 Returns the Diffie-Hellman generator in the specified `encoding`, which can
-be `'latin1'`, `'hex'`, or `'base64'`. If  `encoding` is provided a string is
+be `'latin1'`, `'hex'`, or `'base64'`. If `encoding` is provided a string is
 returned; otherwise a [`Buffer`][] is returned.
 
 ### diffieHellman.getPrime([encoding])
@@ -1196,16 +1204,19 @@ password always creates the same key. The low iteration count and
 non-cryptographically secure hash algorithm allow passwords to be tested very
 rapidly.
 
-In line with OpenSSL's recommendation to use pbkdf2 instead of
+In line with OpenSSL's recommendation to use PBKDF2 instead of
 [`EVP_BytesToKey`][] it is recommended that developers derive a key and IV on
 their own using [`crypto.pbkdf2()`][] and to use [`crypto.createCipheriv()`][]
 to create the `Cipher` object. Users should not use ciphers with counter mode
-(e.g. CTR, GCM or CCM) in `crypto.createCipher()`. A warning is emitted when
+(e.g. CTR, GCM, or CCM) in `crypto.createCipher()`. A warning is emitted when
 they are used in order to avoid the risk of IV reuse that causes
 vulnerabilities. For the case when IV is reused in GCM, see [Nonce-Disrespecting
 Adversaries][] for details.
 
 ### crypto.createCipheriv(algorithm, key, iv[, options])
+<!-- YAML
+added: v0.1.94
+-->
 - `algorithm` {string}
 - `key` {string | Buffer | TypedArray | DataView}
 - `iv` {string | Buffer | TypedArray | DataView}
@@ -1258,7 +1269,7 @@ password always creates the same key. The low iteration count and
 non-cryptographically secure hash algorithm allow passwords to be tested very
 rapidly.
 
-In line with OpenSSL's recommendation to use pbkdf2 instead of
+In line with OpenSSL's recommendation to use PBKDF2 instead of
 [`EVP_BytesToKey`][] it is recommended that developers derive a key and IV on
 their own using [`crypto.pbkdf2()`][] and to use [`crypto.createDecipheriv()`][]
 to create the `Decipher` object.
@@ -1281,8 +1292,8 @@ recent OpenSSL releases, `openssl list-cipher-algorithms` will display the
 available cipher algorithms.
 
 The `key` is the raw key used by the `algorithm` and `iv` is an
-[initialization vector][]. Both arguments must be `'utf8'` encoded strings or
-[buffers][`Buffer`].
+[initialization vector][]. Both arguments must be `'utf8'` encoded strings,
+[Buffers][`Buffer`], `TypedArray`, or `DataView`s.
 
 ### crypto.createDiffieHellman(prime[, primeEncoding][, generator][, generatorEncoding])
 <!-- YAML
@@ -1556,7 +1567,7 @@ higher the number of iterations, the more secure the derived key will be,
 but will take a longer amount of time to complete.
 
 The `salt` should also be as unique as possible. It is recommended that the
-salts are random and their lengths are greater than 16 bytes. See
+salts are random and their lengths are at least 16 bytes. See
 [NIST SP 800-132][] for details.
 
 Example:
@@ -1608,7 +1619,7 @@ higher the number of iterations, the more secure the derived key will be,
 but will take a longer amount of time to complete.
 
 The `salt` should also be as unique as possible. It is recommended that the
-salts are random and their lengths are greater than 16 bytes. See
+salts are random and their lengths are at least 16 bytes. See
 [NIST SP 800-132][] for details.
 
 Example:
@@ -1748,6 +1759,11 @@ Note that this API uses libuv's threadpool, which can have surprising and
 negative performance implications for some applications, see the
 [`UV_THREADPOOL_SIZE`][] documentation for more information.
 
+*Note*: The asynchronous version of `crypto.randomBytes()` is carried out
+in a single threadpool request. To minimize threadpool task length variation,
+partition large `randomBytes` requests when doing so as part of fulfilling a
+client request.
+
 ### crypto.randomFillSync(buffer[, offset][, size])
 <!-- YAML
 added: v7.10.0
@@ -1812,6 +1828,11 @@ Note that this API uses libuv's threadpool, which can have surprising and
 negative performance implications for some applications, see the
 [`UV_THREADPOOL_SIZE`][] documentation for more information.
 
+*Note*: The asynchronous version of `crypto.randomFill()` is carried out
+in a single threadpool request. To minimize threadpool task length variation,
+partition large `randomFill` requests when doing so as part of fulfilling a
+client request.
+
 ### crypto.setEngine(engine[, flags])
 <!-- YAML
 added: v0.11.11
@@ -1848,6 +1869,7 @@ added: v6.6.0
 - `a` {Buffer | TypedArray | DataView}
 - `b` {Buffer | TypedArray | DataView}
 
+This function is based on a constant-time algorithm.
 Returns true if `a` is equal to `b`, without leaking timing information that
 would allow an attacker to guess one of the values. This is suitable for
 comparing HMAC digests or secret values like authentication cookies or
@@ -1902,7 +1924,7 @@ Based on the recommendations of [NIST SP 800-131A][]:
 
 - MD5 and SHA-1 are no longer acceptable where collision resistance is
   required such as digital signatures.
-- The key used with RSA, DSA and DH algorithms is recommended to have
+- The key used with RSA, DSA, and DH algorithms is recommended to have
   at least 2048 bits and that of the curve of ECDSA and ECDH at least
   224 bits, to be safe to use for several years.
 - The DH groups of `modp1`, `modp2` and `modp5` have a key size
@@ -2274,9 +2296,10 @@ the `crypto`, `tls`, and `https` modules and are generally specific to OpenSSL.
 [`verify.verify()`]: #crypto_verify_verify_object_signature_signatureformat
 [Caveats]: #crypto_support_for_weak_or_compromised_algorithms
 [Crypto Constants]: #crypto_crypto_constants_1
-[HTML5's `keygen` element]: http://www.w3.org/TR/html5/forms.html#the-keygen-element
+[HTML5's `keygen` element]: https://www.w3.org/TR/html5/forms.html#the-keygen-element
 [NIST SP 800-131A]: http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar1.pdf
 [NIST SP 800-132]: http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-132.pdf
+[NIST SP 800-38D]: http://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf
 [Nonce-Disrespecting Adversaries]: https://github.com/nonce-disrespect/nonce-disrespect
 [OpenSSL's SPKAC implementation]: https://www.openssl.org/docs/man1.0.2/apps/spkac.html
 [RFC 2412]: https://www.rfc-editor.org/rfc/rfc2412.txt

@@ -31,11 +31,10 @@ added: v0.5.0
 * Returns: {string}
 
 The `os.arch()` method returns a string identifying the operating system CPU
-architecture *for which the Node.js binary was compiled*.
+architecture for which the Node.js binary was compiled.
 
 The current possible values are: `'arm'`, `'arm64'`, `'ia32'`, `'mips'`,
-`'mipsel'`, `'ppc'`, `'ppc64'`, `'s390'`, `'s390x'`, `'x32'`, `'x64'`,  and
-`'x86'`.
+`'mipsel'`, `'ppc'`, `'ppc64'`, `'s390'`, `'s390x'`, `'x32'`, and `'x64'`.
 
 Equivalent to [`process.arch`][].
 
@@ -226,7 +225,7 @@ The `os.loadavg()` method returns an array containing the 1, 5, and 15 minute
 load averages.
 
 The load average is a measure of system activity, calculated by the operating
-system and expressed as a fractional number.  As a rule of thumb, the load
+system and expressed as a fractional number. As a rule of thumb, the load
 average should ideally be less than the number of logical CPUs in the system.
 
 The load average is a UNIX-specific concept with no real equivalent on
@@ -405,7 +404,7 @@ added: v6.0.0
 * Returns: {Object}
 
 The `os.userInfo()` method returns information about the currently effective
-user -- on POSIX platforms, this is typically a subset of the password file. The
+user — on POSIX platforms, this is typically a subset of the password file. The
 returned object includes the `username`, `uid`, `gid`, `shell`, and `homedir`.
 On Windows, the `uid` and `gid` fields are `-1`, and `shell` is `null`.
 
@@ -453,7 +452,7 @@ The following signal constants are exported by `os.constants.signals`:
   <tr>
     <td><code>SIGILL</code></td>
     <td>Sent to a process to notify that it has attempted to perform an illegal,
-    malformed, unknown or privileged instruction.</td>
+    malformed, unknown, or privileged instruction.</td>
   </tr>
   <tr>
     <td><code>SIGTRAP</code></td>

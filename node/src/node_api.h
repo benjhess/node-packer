@@ -14,6 +14,8 @@
 #include <stdbool.h>
 #include "node_api_types.h"
 
+struct uv_loop_s;  // Forward declaration.
+
 #ifdef _WIN32
   #ifdef BUILDING_NODE_EXTENSION
     #ifdef EXTERNAL_NAPI
@@ -98,7 +100,7 @@ typedef struct {
   EXTERN_C_END
 
 #define NAPI_MODULE(modname, regfunc) \
-  NAPI_MODULE_X(modname, regfunc, NULL, 0)
+  NAPI_MODULE_X(modname, regfunc, NULL, 0)  // NOLINT (readability/null_usage)
 
 #define NAPI_AUTO_LENGTH SIZE_MAX
 
@@ -109,6 +111,8 @@ NAPI_EXTERN void napi_module_register(napi_module* mod);
 NAPI_EXTERN napi_status
 napi_get_last_error_info(napi_env env,
                          const napi_extended_error_info** result);
+
+NAPI_EXTERN napi_status napi_fatal_exception(napi_env env, napi_value err);
 
 NAPI_EXTERN NAPI_NO_RETURN void napi_fatal_error(const char* location,
                                                  size_t location_len,
@@ -422,6 +426,14 @@ NAPI_EXTERN napi_status napi_escape_handle(napi_env env,
                                            napi_value escapee,
                                            napi_value* result);
 
+NAPI_EXTERN napi_status napi_open_callback_scope(napi_env env,
+                                                 napi_value resource_object,
+                                                 napi_async_context context,
+                                                 napi_callback_scope* result);
+
+NAPI_EXTERN napi_status napi_close_callback_scope(napi_env env,
+                                                  napi_callback_scope scope);
+
 // Methods to support error handling
 NAPI_EXTERN napi_status napi_throw(napi_env env, napi_value error);
 NAPI_EXTERN napi_status napi_throw_error(napi_env env,
@@ -580,6 +592,10 @@ NAPI_EXTERN napi_status napi_adjust_external_memory(napi_env env,
 NAPI_EXTERN napi_status napi_run_script(napi_env env,
                                         napi_value script,
                                         napi_value* result);
+
+// Return the current libuv event loop for a given environment
+NAPI_EXTERN napi_status napi_get_uv_event_loop(napi_env env,
+                                               struct uv_loop_s** loop);
 
 EXTERN_C_END
 

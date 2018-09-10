@@ -12,7 +12,7 @@ The module exports two specific components:
 * A `Console` class with methods such as `console.log()`, `console.error()` and
   `console.warn()` that can be used to write to any Node.js stream.
 * A global `console` instance configured to write to [`process.stdout`][] and
-  [`process.stderr`][].  The global `console` can be used without calling
+  [`process.stderr`][]. The global `console` can be used without calling
   `require('console')`.
 
 ***Warning***: The global console object's methods are neither consistently
@@ -78,13 +78,12 @@ const { Console } = console;
 ```
 
 ### new Console(stdout[, stderr])
-* `stdout` {Writable}
-* `stderr` {Writable}
+* `stdout` {stream.Writable}
+* `stderr` {stream.Writable}
 
-Creates a new `Console` by passing one or two writable stream instances.
-`stdout` is a writable stream to print log or info output. `stderr`
-is used for warning or error output. If `stderr` is not passed, warning and error
-output will be sent to `stdout`.
+Creates a new `Console` with one or two writable stream instances. `stdout` is a
+writable stream to print log or info output. `stderr` is used for warning or
+error output. If `stderr` is not provided, `stdout` is used for `stderr`.
 
 ```js
 const output = fs.createWriteStream('./stdout.log');
@@ -216,7 +215,7 @@ undefined
 >
 ```
 
-### console.countReset([label = 'default'])
+### console.countReset([label='default'])
 <!-- YAML
 added: v8.3.0
 -->
@@ -237,6 +236,15 @@ abc: 1
 undefined
 >
 ```
+
+### console.debug(data[, ...args])
+<!-- YAML
+added: v8.0.0
+-->
+* `data` {any}
+* `...args` {any}
+
+The `console.debug()` function is an alias for [`console.log()`][].
 
 ### console.dir(obj[, options])
 <!-- YAML
@@ -293,7 +301,7 @@ values are concatenated. See [`util.format()`][] for more information.
 added: v8.5.0
 -->
 
-* `label` {any}
+* `...label` {any}
 
 Increases indentation of subsequent lines by two spaces.
 

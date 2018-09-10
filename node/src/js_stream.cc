@@ -1,10 +1,8 @@
 #include "js_stream.h"
 
-#include "async-wrap.h"
-#include "env.h"
+#include "async_wrap.h"
 #include "env-inl.h"
 #include "node_buffer.h"
-#include "stream_base.h"
 #include "stream_base-inl.h"
 #include "v8.h"
 
@@ -183,7 +181,7 @@ void JSStream::DoAfterWrite(const FunctionCallbackInfo<Value>& args) {
   ASSIGN_OR_RETURN_UNWRAP(&wrap, args.Holder());
   ASSIGN_OR_RETURN_UNWRAP(&w, args[0].As<Object>());
 
-  wrap->OnAfterWrite(w);
+  w->Done(0);
 }
 
 
@@ -253,4 +251,4 @@ void JSStream::Initialize(Local<Object> target,
 
 }  // namespace node
 
-NODE_MODULE_CONTEXT_AWARE_BUILTIN(js_stream, node::JSStream::Initialize)
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(js_stream, node::JSStream::Initialize)

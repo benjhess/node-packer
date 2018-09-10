@@ -22,8 +22,12 @@
 // Flags: --expose_internals
 'use strict';
 const common = require('../common');
+
+const fixtures = require('../common/fixtures');
+
 const assert = require('assert');
 const fs = require('fs');
+const path = require('path');
 
 const O_APPEND = fs.constants.O_APPEND || 0;
 const O_CREAT = fs.constants.O_CREAT || 0;
@@ -79,9 +83,11 @@ assert.throws(
   /^Error: Unknown file open flag: null$/
 );
 
-if (common.isLinux) {
-  const file = `${__dirname}/../fixtures/a.js`;
-
+if (common.isLinux || common.isOSX) {
+  const tmpdir = require('../common/tmpdir');
+  tmpdir.refresh();
+  const file = path.join(tmpdir.path, 'a.js');
+  fs.copyFileSync(fixtures.path('a.js'), file);
   fs.open(file, O_DSYNC, common.mustCall(assert.ifError));
 }
 

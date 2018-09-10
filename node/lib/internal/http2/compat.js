@@ -40,12 +40,18 @@ let statusMessageWarned = false;
 // close as possible to the current require('http') API
 
 function assertValidHeader(name, value) {
-  if (name === '' || typeof name !== 'string')
-    throw new errors.TypeError('ERR_INVALID_HTTP_TOKEN', 'Header name', name);
-  if (isPseudoHeader(name))
-    throw new errors.Error('ERR_HTTP2_PSEUDOHEADER_NOT_ALLOWED');
-  if (value === undefined || value === null)
-    throw new errors.TypeError('ERR_HTTP2_INVALID_HEADER_VALUE');
+  let err;
+  if (name === '' || typeof name !== 'string') {
+    err = new errors.TypeError('ERR_INVALID_HTTP_TOKEN', 'Header name', name);
+  } else if (isPseudoHeader(name)) {
+    err = new errors.Error('ERR_HTTP2_PSEUDOHEADER_NOT_ALLOWED');
+  } else if (value === undefined || value === null) {
+    err = new errors.TypeError('ERR_HTTP2_INVALID_HEADER_VALUE', value, name);
+  }
+  if (err !== undefined) {
+    Error.captureStackTrace(err, assertValidHeader);
+    throw err;
+  }
 }
 
 function isPseudoHeader(name) {
@@ -116,32 +122,15 @@ function onStreamDrain() {
     response.emit('drain');
 }
 
-// TODO Http2Stream does not emit 'close'
-function onStreamClosedRequest() {
-  const request = this[kRequest];
-  if (request !== undefined)
-    request.push(null);
-}
-
-// TODO Http2Stream does not emit 'close'
-function onStreamClosedResponse() {
-  const response = this[kResponse];
-  if (response !== undefined)
-    response.emit('finish');
-}
-
 function onStreamAbortedRequest() {
   const request = this[kRequest];
   if (request !== undefined && request[kState].closed === false) {
     request.emit('aborted');
-    request.emit('close');
   }
 }
 
 function onStreamAbortedResponse() {
-  const response = this[kResponse];
-  if (response !== undefined && response[kState].closed === false)
-    response.emit('close');
+  // non-op for now
 }
 
 function resumeStream(stream) {
@@ -241,11 +230,8 @@ class Http2ServerRequest extends Readable {
     stream.on('trailers', onStreamTrailers);
     stream.on('end', onStreamEnd);
     stream.on('error', onStreamError);
-    stream.on('close', onStreamClosedRequest);
     stream.on('aborted', onStreamAbortedRequest);
-    const onfinish = this[kFinish].bind(this);
-    stream.on('streamClosed', onfinish);
-    stream.on('finish', onfinish);
+    stream.on('close', this[kFinish].bind(this));
     this.on('pause', onRequestPause);
     this.on('resume', onRequestResume);
   }
@@ -306,7 +292,7 @@ class Http2ServerRequest extends Readable {
       state.didRead = true;
       process.nextTick(resumeStream, this[kStream]);
     } else {
-      this.emit('error', new errors.Error('ERR_HTTP2_STREAM_CLOSED'));
+      this.emit('error', new errors.Error('ERR_HTTP2_INVALID_STREAM'));
     }
   }
 
@@ -354,6 +340,7 @@ class Http2ServerRequest extends Readable {
     // dump it for compatibility with http1
     if (!state.didRead && !this._readableState.resumeScheduled)
       this.resume();
+    this.emit('close');
   }
 }
 
@@ -374,11 +361,8 @@ class Http2ServerResponse extends Stream {
     stream[kResponse] = this;
     this.writable = true;
     stream.on('drain', onStreamDrain);
-    stream.on('close', onStreamClosedResponse);
     stream.on('aborted', onStreamAbortedResponse);
-    const onfinish = this[kFinish].bind(this);
-    stream.on('streamClosed', onfinish);
-    stream.on('finish', onfinish);
+    stream.on('close', this[kFinish].bind(this));
   }
 
   // User land modules such as finalhandler just check truthiness of this
@@ -530,7 +514,7 @@ class Http2ServerResponse extends Stream {
     const state = this[kState];
 
     if (state.closed)
-      throw new errors.Error('ERR_HTTP2_STREAM_CLOSED');
+      throw new errors.Error('ERR_HTTP2_INVALID_STREAM');
     if (this[kStream].headersSent)
       throw new errors.Error('ERR_HTTP2_HEADERS_SENT');
 
@@ -560,7 +544,7 @@ class Http2ServerResponse extends Stream {
     }
 
     if (this[kState].closed) {
-      const err = new errors.Error('ERR_HTTP2_STREAM_CLOSED');
+      const err = new errors.Error('ERR_HTTP2_INVALID_STREAM');
       if (typeof cb === 'function')
         process.nextTick(cb, err);
       else
@@ -630,12 +614,15 @@ class Http2ServerResponse extends Stream {
     if (typeof callback !== 'function')
       throw new errors.TypeError('ERR_INVALID_CALLBACK');
     if (this[kState].closed) {
-      process.nextTick(callback, new errors.Error('ERR_HTTP2_STREAM_CLOSED'));
+      process.nextTick(callback, new errors.Error('ERR_HTTP2_INVALID_STREAM'));
       return;
     }
-    this[kStream].pushStream(headers, {}, function(stream, headers, options) {
-      const response = new Http2ServerResponse(stream);
-      callback(null, response);
+    this[kStream].pushStream(headers, {}, (err, stream, headers, options) => {
+      if (err) {
+        callback(err);
+        return;
+      }
+      callback(null, new Http2ServerResponse(stream));
     });
   }
 
@@ -659,6 +646,7 @@ class Http2ServerResponse extends Stream {
     this[kProxySocket] = null;
     stream[kResponse] = undefined;
     this.emit('finish');
+    this.emit('close');
   }
 
   // TODO doesn't support callbacks

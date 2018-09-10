@@ -21,13 +21,11 @@
 
 'use strict';
 
-const binding = process.binding('http_parser');
-const { methods, HTTPParser } = binding;
+const { methods, HTTPParser } = process.binding('http_parser');
 
 const FreeList = require('internal/freelist');
 const { ondrain } = require('internal/http');
 const incoming = require('_http_incoming');
-const { emitDestroy } = require('async_hooks');
 const {
   IncomingMessage,
   readStart,
@@ -78,7 +76,7 @@ function parserOnHeadersComplete(versionMajor, versionMinor, headers, method,
   parser.incoming = new IncomingMessage(parser.socket);
   parser.incoming.httpVersionMajor = versionMajor;
   parser.incoming.httpVersionMinor = versionMinor;
-  parser.incoming.httpVersion = versionMajor + '.' + versionMinor;
+  parser.incoming.httpVersion = `${versionMajor}.${versionMinor}`;
   parser.incoming.url = url;
 
   var n = headers.length;
@@ -108,19 +106,10 @@ function parserOnHeadersComplete(versionMajor, versionMinor, headers, method,
 
   parser.incoming.upgrade = upgrade;
 
-  var skipBody = 0; // response to HEAD or CONNECT
+  if (upgrade)
+    return 2;  // Skip body and treat as Upgrade.
 
-  if (!upgrade) {
-    // For upgraded connections and CONNECT method request, we'll emit this
-    // after parser.execute so that we can capture the first part of the new
-    // protocol.
-    skipBody = parser.onIncoming(parser.incoming, shouldKeepAlive);
-  }
-
-  if (typeof skipBody !== 'number')
-    return skipBody ? 1 : 0;
-  else
-    return skipBody;
+  return parser.onIncoming(parser.incoming, shouldKeepAlive);
 }
 
 // XXX This is a mess.
@@ -218,7 +207,7 @@ function freeParser(parser, req, socket) {
     } else {
       // Since the Parser destructor isn't going to run the destroy() callbacks
       // it needs to be triggered manually.
-      emitDestroy(parser.getAsyncId());
+      parser.free();
     }
   }
   if (req) {

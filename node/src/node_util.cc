@@ -36,7 +36,6 @@ using v8::Value;
 
 #define V(_, ucname) \
   static void ucname(const FunctionCallbackInfo<Value>& args) {               \
-    CHECK_EQ(1, args.Length());                                               \
     args.GetReturnValue().Set(args[0]->ucname());                             \
   }
 
@@ -44,7 +43,6 @@ using v8::Value;
 #undef V
 
 static void IsAnyArrayBuffer(const FunctionCallbackInfo<Value>& args) {
-  CHECK_EQ(1, args.Length());
   args.GetReturnValue().Set(
     args[0]->IsArrayBuffer() || args[0]->IsSharedArrayBuffer());
 }
@@ -238,4 +236,4 @@ void Initialize(Local<Object> target,
 }  // namespace util
 }  // namespace node
 
-NODE_MODULE_CONTEXT_AWARE_BUILTIN(util, node::util::Initialize)
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(util, node::util::Initialize)

@@ -117,7 +117,7 @@ For UDP sockets, causes the `dgram.Socket` to listen for datagram
 messages on a named `port` and optional `address`. If `port` is not
 specified or is `0`, the operating system will attempt to bind to a
 random port. If `address` is not specified, the operating system will
-attempt to listen on all addresses.  Once binding is complete, a
+attempt to listen on all addresses. Once binding is complete, a
 `'listening'` event is emitted and the optional `callback` function is
 called.
 
@@ -161,7 +161,7 @@ added: v0.11.14
 -->
 
 * `options` {Object} Required. Supports the following properties:
-  * `port` {Integer}
+  * `port` {integer}
   * `address` {string}
   * `exclusive` {boolean}
 * `callback` {Function}
@@ -171,7 +171,7 @@ messages on a named `port` and optional `address` that are passed as
 properties of an `options` object passed as the first argument. If
 `port` is not specified or is `0`, the operating system will attempt
 to bind to a random port. If `address` is not specified, the operating
-system will attempt to listen on all addresses.  Once binding is
+system will attempt to listen on all addresses. Once binding is
 complete, a `'listening'` event is emitted and the optional `callback`
 function is called.
 
@@ -231,14 +231,14 @@ drop membership on all valid interfaces.
 added: v8.7.0
 -->
 
-* Returns {number} the `SO_RCVBUF` socket receive buffer size in bytes.
+* Returns: {number} the `SO_RCVBUF` socket receive buffer size in bytes.
 
 ### socket.getSendBufferSize()
 <!-- YAML
 added: v8.7.0
 -->
 
-* Returns {number} the `SO_SNDBUF` socket send buffer size in bytes.
+* Returns: {number} the `SO_SNDBUF` socket send buffer size in bytes.
 
 ### socket.ref()
 <!-- YAML
@@ -293,12 +293,12 @@ the `offset` and `length` specify the offset within the `Buffer` where the
 message begins and the number of bytes in the message, respectively.
 If `msg` is a `String`, then it is automatically converted to a `Buffer`
 with `'utf8'` encoding. With messages that
-contain  multi-byte characters, `offset` and `length` will be calculated with
+contain multi-byte characters, `offset` and `length` will be calculated with
 respect to [byte length][] and not the character position.
-If `msg` is an array, `offset` and `length` must not be specified.
+If `msg` is an array, `offset` and `length` must not be specified.
 
 The `address` argument is a string. If the value of `address` is a host name,
-DNS will be used to resolve the address of the host.  If `address` is not
+DNS will be used to resolve the address of the host. If `address` is not
 provided or otherwise falsy, `'127.0.0.1'` (for `udp4` sockets) or `'::1'`
 (for `udp6` sockets) will be used by default.
 
@@ -306,7 +306,7 @@ If the socket has not been previously bound with a call to `bind`, the socket
 is assigned a random port number and is bound to the "all interfaces" address
 (`'0.0.0.0'` for `udp4` sockets, `'::0'` for `udp6` sockets.)
 
-An optional `callback` function  may be specified to as a way of reporting
+An optional `callback` function may be specified to as a way of reporting
 DNS errors or for determining when it is safe to reuse the `buf` object.
 Note that DNS lookups delay the time to send for at least one tick of the
 Node.js event loop.
@@ -382,7 +382,7 @@ added: v0.6.9
 
 * `flag` {boolean}
 
-Sets or clears the `SO_BROADCAST` socket option.  When set to `true`, UDP
+Sets or clears the `SO_BROADCAST` socket option. When set to `true`, UDP
 packets may be sent to a local interface's broadcast address.
 
 ### socket.setMulticastInterface(multicastInterface)
@@ -390,9 +390,9 @@ packets may be sent to a local interface's broadcast address.
 added: v8.6.0
 -->
 
-* `multicastInterface` {String}
+* `multicastInterface` {string}
 
-*Note: All references to scope in this section are refering to
+*Note: All references to scope in this section are referring to
 [IPv6 Zone Indices][], which are defined by [RFC 4007][]. In string form, an IP
 with a scope index is written as `'IP%scope'` where scope is an interface name or
 interface number.*
@@ -455,7 +455,7 @@ On IPv4, if `multicastInterface` is a valid address but does not match any
 interface, or if the address does not match the family then
 a [`System Error`][] such as `EADDRNOTAVAIL` or `EPROTONOSUP` is thrown.
 
-On IPv6, most errors with specifying or omiting scope will result in the socket
+On IPv6, most errors with specifying or omitting scope will result in the socket
 continuing to use (or returning to) the system's default interface selection.
 
 A socket's address family's ANY address (IPv4 `'0.0.0.0'` or IPv6 `'::'`) can be
@@ -470,7 +470,7 @@ added: v0.3.8
 
 * `flag` {boolean}
 
-Sets or clears the `IP_MULTICAST_LOOP` socket option.  When set to `true`,
+Sets or clears the `IP_MULTICAST_LOOP` socket option. When set to `true`,
 multicast packets will also be received on the local interface.
 
 ### socket.setMulticastTTL(ttl)
@@ -480,13 +480,13 @@ added: v0.3.8
 
 * `ttl` {number} Integer.
 
-Sets the `IP_MULTICAST_TTL` socket option.  While TTL generally stands for
+Sets the `IP_MULTICAST_TTL` socket option. While TTL generally stands for
 "Time to Live", in this context it specifies the number of IP hops that a
-packet is allowed to travel through, specifically for multicast traffic.  Each
+packet is allowed to travel through, specifically for multicast traffic. Each
 router or gateway that forwards a packet decrements the TTL. If the TTL is
 decremented to 0 by a router, it will not be forwarded.
 
-The argument passed to to `socket.setMulticastTTL()` is a number of hops
+The argument passed to `socket.setMulticastTTL()` is a number of hops
 between 0 and 255. The default on most systems is `1` but can vary.
 
 ### socket.setRecvBufferSize(size)
@@ -518,8 +518,8 @@ added: v0.1.101
 
 Sets the `IP_TTL` socket option. While TTL generally stands for "Time to Live",
 in this context it specifies the number of IP hops that a packet is allowed to
-travel through.  Each router or gateway that forwards a packet decrements the
-TTL.  If the TTL is decremented to 0 by a router, it will not be forwarded.
+travel through. Each router or gateway that forwards a packet decrements the
+TTL. If the TTL is decremented to 0 by a router, it will not be forwarded.
 Changing TTL values is typically done for network probes or when multicasting.
 
 The argument to `socket.setTTL()` is a number of hops between 1 and 255.
@@ -592,7 +592,7 @@ changes:
 
 Creates a `dgram.Socket` object. Once the socket is created, calling
 [`socket.bind()`][] will instruct the socket to begin listening for datagram
-messages. When `address` and `port` are not passed to  [`socket.bind()`][] the
+messages. When `address` and `port` are not passed to [`socket.bind()`][] the
 method will bind the socket to the "all interfaces" address on a random port
 (it does the right thing for both `udp4` and `udp6` sockets). The bound address
 and port can be retrieved using [`socket.address().address`][] and
@@ -613,7 +613,7 @@ which is added as a listener for `'message'` events.
 
 Once the socket is created, calling [`socket.bind()`][] will instruct the
 socket to begin listening for datagram messages. When `address` and `port` are
-not passed to  [`socket.bind()`][] the method will bind the socket to the "all
+not passed to [`socket.bind()`][] the method will bind the socket to the "all
 interfaces" address on a random port (it does the right thing for both `udp4`
 and `udp6` sockets). The bound address and port can be retrieved using
 [`socket.address().address`][] and [`socket.address().port`][].
@@ -629,7 +629,7 @@ and `udp6` sockets). The bound address and port can be retrieved using
 [`socket.address().address`]: #dgram_socket_address
 [`socket.address().port`]: #dgram_socket_address
 [`socket.bind()`]: #dgram_socket_bind_port_address_callback
-[`System Error`]: errors.html#errors_class_system_error
+[`System Error`]: errors.html#errors_class_systemerror
 [byte length]: buffer.html#buffer_class_method_buffer_bytelength_string_encoding
-[IPv6 Zone Indices]: https://en.wikipedia.org/wiki/IPv6_address#Link-local_addresses_and_zone_indices
+[IPv6 Zone Indices]: https://en.wikipedia.org/wiki/IPv6_address#Scoped_literal_IPv6_addresses
 [RFC 4007]: https://tools.ietf.org/html/rfc4007
