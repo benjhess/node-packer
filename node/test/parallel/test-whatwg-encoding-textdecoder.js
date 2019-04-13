@@ -6,6 +6,7 @@ const common = require('../common');
 const assert = require('assert');
 const { TextDecoder, TextEncoder } = require('util');
 const { customInspectSymbol: inspect } = require('internal/util');
+const util = require('util');
 
 const buf = Buffer.from([0xef, 0xbb, 0xbf, 0x74, 0x65,
                          0x73, 0x74, 0xe2, 0x82, 0xac]);
@@ -52,27 +53,36 @@ assert(TextDecoder);
 if (common.hasIntl) {
   ['unicode-1-1-utf-8', 'utf8', 'utf-8'].forEach((i) => {
     const dec = new TextDecoder(i, { fatal: true });
-    assert.throws(() => dec.decode(buf.slice(0, 8)),
-                  common.expectsError({
-                    code: 'ERR_ENCODING_INVALID_ENCODED_DATA',
-                    type: TypeError,
-                    message: 'The encoded data was not valid for encoding utf-8'
-                  }));
+    common.expectsError(() => dec.decode(buf.slice(0, 8)),
+                        {
+                          code: 'ERR_ENCODING_INVALID_ENCODED_DATA',
+                          type: TypeError,
+                          message: 'The encoded data was not valid ' +
+                          'for encoding utf-8'
+                        });
   });
 
   ['unicode-1-1-utf-8', 'utf8', 'utf-8'].forEach((i) => {
     const dec = new TextDecoder(i, { fatal: true });
-    assert.doesNotThrow(() => dec.decode(buf.slice(0, 8), { stream: true }));
-    assert.doesNotThrow(() => dec.decode(buf.slice(8)));
+    dec.decode(buf.slice(0, 8), { stream: true });
+    dec.decode(buf.slice(8));
   });
 } else {
-  assert.throws(
+  common.expectsError(
     () => new TextDecoder('utf-8', { fatal: true }),
-    common.expectsError({
+    {
       code: 'ERR_NO_ICU',
       type: TypeError,
       message: '"fatal" option is not supported on Node.js compiled without ICU'
-    }));
+    });
+}
+
+// Test TextDecoder, label undefined, options null
+{
+  const dec = new TextDecoder(undefined, null);
+  assert.strictEqual(dec.encoding, 'utf-8');
+  assert.strictEqual(dec.fatal, false);
+  assert.strictEqual(dec.ignoreBOM, false);
 }
 
 // Test TextDecoder, UTF-16le
@@ -87,6 +97,42 @@ if (common.hasIntl) {
   const dec = new TextDecoder('utf-16be');
   const res = dec.decode(Buffer.from('test€', 'utf-16le').swap16());
   assert.strictEqual(res, 'test€');
+}
+
+// Test TextDecoder inspect with hidden fields
+{
+  const dec = new TextDecoder('utf-8', { ignoreBOM: true });
+  if (common.hasIntl) {
+    assert.strictEqual(
+      util.inspect(dec, { showHidden: true }),
+      'TextDecoder {\n  encoding: \'utf-8\',\n  fatal: false,\n  ' +
+      'ignoreBOM: true,\n  [Symbol(flags)]: 4,\n  [Symbol(handle)]: {} }'
+    );
+  } else {
+    assert.strictEqual(
+      util.inspect(dec, { showHidden: true }),
+      'TextDecoder {\n  encoding: \'utf-8\',\n  fatal: false,\n  ' +
+      'ignoreBOM: true,\n  [Symbol(flags)]: 4,\n  [Symbol(handle)]:\n   ' +
+      'StringDecoder {\n     encoding: \'utf8\',\n     ' +
+      '[Symbol(kNativeDecoder)]: <Buffer 00 00 00 00 00 00 01> } }'
+    );
+  }
+}
+
+
+// Test TextDecoder inspect without hidden fields
+{
+  const dec = new TextDecoder('utf-8', { ignoreBOM: true });
+  assert.strictEqual(
+    util.inspect(dec, { showHidden: false }),
+    'TextDecoder { encoding: \'utf-8\', fatal: false, ignoreBOM: true }'
+  );
+}
+
+// Test TextDecoder inspect with negative depth
+{
+  const dec = new TextDecoder();
+  assert.strictEqual(util.inspect(dec, { depth: -1 }), '[Object]');
 }
 
 {
@@ -106,11 +152,11 @@ if (common.hasIntl) {
     message: 'Value of "this" must be of type TextDecoder'
   };
 
-  assert.doesNotThrow(() => inspectFn.call(instance, Infinity, {}));
-  assert.doesNotThrow(() => decodeFn.call(instance));
-  assert.doesNotThrow(() => encodingGetter.call(instance));
-  assert.doesNotThrow(() => fatalGetter.call(instance));
-  assert.doesNotThrow(() => ignoreBOMGetter.call(instance));
+  inspectFn.call(instance, Infinity, {});
+  decodeFn.call(instance);
+  encodingGetter.call(instance);
+  fatalGetter.call(instance);
+  ignoreBOMGetter.call(instance);
 
   const invalidThisArgs = [{}, [], true, 1, '', new TextEncoder()];
   invalidThisArgs.forEach((i) => {
@@ -187,6 +233,16 @@ testDecodeSample(
     0xFF, 0xDB, 0xFD, 0xDF, 0xFE, 0xFF
   ]
 );
+
+{
+  common.expectsError(
+    () => new TextDecoder('utf-8', 1),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError
+    }
+  );
+}
 
 // From: https://github.com/w3c/web-platform-tests/blob/master/encoding/api-invalid-label.html
 [

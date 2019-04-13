@@ -2,7 +2,7 @@
 
 const config = process.binding('config');
 const prefix = `(${process.release.name}:${process.pid}) `;
-const errors = require('internal/errors');
+const { ERR_INVALID_ARG_TYPE } = require('internal/errors').codes;
 
 exports.setup = setupProcessWarnings;
 
@@ -20,14 +20,16 @@ function writeOut(message) {
 }
 
 function onClose(fd) {
-  return function() {
+  return () => {
     if (fs === null) fs = require('fs');
-    fs.close(fd, nop);
+    try {
+      fs.closeSync(fd);
+    } catch {}
   };
 }
 
 function onOpen(cb) {
-  return function(err, fd) {
+  return (err, fd) => {
     acquiringFd = false;
     if (fd !== undefined) {
       cachedFd = fd;
@@ -41,7 +43,7 @@ function onOpen(cb) {
 function onAcquired(message) {
   // make a best effort attempt at writing the message
   // to the fd. Errors are ignored at this point.
-  return function(err, fd) {
+  return (err, fd) => {
     if (err)
       return writeOut(message);
     if (fs === null) fs = require('fs');
@@ -70,7 +72,7 @@ function output(message) {
 }
 
 function doEmitWarning(warning) {
-  return function() {
+  return () => {
     process.emit('warning', warning);
   };
 }
@@ -83,7 +85,7 @@ function setupProcessWarnings() {
       if (isDeprecation && process.noDeprecation) return;
       const trace = process.traceProcessWarnings ||
                     (isDeprecation && process.traceDeprecation);
-      var msg = `${prefix}`;
+      var msg = prefix;
       if (warning.code)
         msg += `[${warning.code}] `;
       if (trace && warning.stack) {
@@ -104,7 +106,7 @@ function setupProcessWarnings() {
   // process.emitWarning(error)
   // process.emitWarning(str[, type[, code]][, ctor])
   // process.emitWarning(str[, options])
-  process.emitWarning = function(warning, type, code, ctor, now) {
+  process.emitWarning = (warning, type, code, ctor, now) => {
     var detail;
     if (type !== null && typeof type === 'object' && !Array.isArray(type)) {
       ctor = type.ctor;
@@ -122,10 +124,11 @@ function setupProcessWarnings() {
       code = undefined;
     }
     if (code !== undefined && typeof code !== 'string')
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'code', 'string');
+      throw new ERR_INVALID_ARG_TYPE('code', 'string', code);
     if (type !== undefined && typeof type !== 'string')
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'type', 'string');
+      throw new ERR_INVALID_ARG_TYPE('type', 'string', type);
     if (warning === undefined || typeof warning === 'string') {
+      // eslint-disable-next-line no-restricted-syntax
       warning = new Error(warning);
       warning.name = String(type || 'Warning');
       if (code !== undefined) warning.code = code;
@@ -133,8 +136,7 @@ function setupProcessWarnings() {
       Error.captureStackTrace(warning, ctor || process.emitWarning);
     }
     if (!(warning instanceof Error)) {
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE',
-                                 'warning', ['Error', 'string']);
+      throw new ERR_INVALID_ARG_TYPE('warning', ['Error', 'string'], warning);
     }
     if (warning.name === 'DeprecationWarning') {
       if (process.noDeprecation)

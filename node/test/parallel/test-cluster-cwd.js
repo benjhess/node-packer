@@ -1,8 +1,8 @@
 'use strict';
 const common = require('../common');
-const tmpdir = require('../common/tmpdir');
 const assert = require('assert');
 const cluster = require('cluster');
+const tmpdir = require('../common/tmpdir');
 
 if (cluster.isMaster) {
   tmpdir.refresh();

@@ -69,15 +69,14 @@ For example, the query string `'foo=bar&abc=xyz&abc=123'` is parsed into:
 }
 ```
 
-*Note*: The object returned by the `querystring.parse()` method _does not_
+The object returned by the `querystring.parse()` method _does not_
 prototypically inherit from the JavaScript `Object`. This means that typical
 `Object` methods such as `obj.toString()`, `obj.hasOwnProperty()`, and others
 are not defined and *will not work*.
 
 By default, percent-encoded characters within the query string will be assumed
 to use UTF-8 encoding. If an alternative character encoding is used, then an
-alternative `decodeURIComponent` option will need to be specified as illustrated
-in the following example:
+alternative `decodeURIComponent` option will need to be specified:
 
 ```js
 // Assuming gbkDecodeURIComponent function already exists...
@@ -108,8 +107,6 @@ It serializes the following types of values passed in `obj`:
 {string|number|boolean|string[]|number[]|boolean[]}
 Any other input values will be coerced to empty strings.
 
-For example:
-
 ```js
 querystring.stringify({ foo: 'bar', baz: ['qux', 'quux'], corge: '' });
 // returns 'foo=bar&baz=qux&baz=quux&corge='
@@ -120,8 +117,7 @@ querystring.stringify({ foo: 'bar', baz: 'qux' }, ';', ':');
 
 By default, characters requiring percent-encoding within the query string will
 be encoded as UTF-8. If an alternative encoding is required, then an alternative
-`encodeURIComponent` option will need to be specified as illustrated in the
-following example:
+`encodeURIComponent` option will need to be specified:
 
 ```js
 // Assuming gbkEncodeURIComponent function already exists,
@@ -135,7 +131,6 @@ querystring.stringify({ w: '中文', foo: 'bar' }, null, null,
 added: v0.1.25
 -->
 * `str` {string}
-
 
 The `querystring.unescape()` method performs decoding of URL percent-encoded
 characters on the given `str`.

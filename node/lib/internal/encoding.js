@@ -3,7 +3,13 @@
 // An implementation of the WHATWG Encoding Standard
 // https://encoding.spec.whatwg.org
 
-const errors = require('internal/errors');
+const {
+  ERR_ENCODING_INVALID_ENCODED_DATA,
+  ERR_ENCODING_NOT_SUPPORTED,
+  ERR_INVALID_ARG_TYPE,
+  ERR_INVALID_THIS,
+  ERR_NO_ICU
+} = require('internal/errors').codes;
 const kHandle = Symbol('handle');
 const kFlags = Symbol('flags');
 const kEncoding = Symbol('encoding');
@@ -19,7 +25,7 @@ const { isArrayBufferView } = require('internal/util/types');
 
 const {
   isArrayBuffer
-} = process.binding('util');
+} = internalBinding('types');
 
 const {
   encodeUtf8String
@@ -30,6 +36,21 @@ function lazyBuffer() {
   if (Buffer === undefined)
     Buffer = require('buffer').Buffer;
   return Buffer;
+}
+
+function validateEncoder(obj) {
+  if (obj == null || obj[kEncoder] !== true)
+    throw new ERR_INVALID_THIS('TextEncoder');
+}
+
+function validateDecoder(obj) {
+  if (obj == null || obj[kDecoder] !== true)
+    throw new ERR_INVALID_THIS('TextDecoder');
+}
+
+function validateArgument(prop, expected, propName, expectedName) {
+  if (typeof prop !== expected)
+    throw new ERR_INVALID_ARG_TYPE(propName, expectedName, prop);
 }
 
 const CONVERTER_FLAGS_FLUSH = 0x1;
@@ -288,20 +309,17 @@ class TextEncoder {
   }
 
   get encoding() {
-    if (this == null || this[kEncoder] !== true)
-      throw new errors.TypeError('ERR_INVALID_THIS', 'TextEncoder');
+    validateEncoder(this);
     return 'utf-8';
   }
 
   encode(input = '') {
-    if (this == null || this[kEncoder] !== true)
-      throw new errors.TypeError('ERR_INVALID_THIS', 'TextEncoder');
+    validateEncoder(this);
     return encodeUtf8String(`${input}`);
   }
 
   [inspect](depth, opts) {
-    if (this == null || this[kEncoder] !== true)
-      throw new errors.TypeError('ERR_INVALID_THIS', 'TextEncoder');
+    validateEncoder(this);
     if (typeof depth === 'number' && depth < 0)
       return opts.stylize('[Object]', 'special');
     var ctor = getConstructorOf(this);
@@ -323,33 +341,25 @@ Object.defineProperties(
       value: 'TextEncoder'
     } });
 
-const { hasConverter, TextDecoder } =
+const TextDecoder =
   process.binding('config').hasIntl ?
     makeTextDecoderICU() :
     makeTextDecoderJS();
-
-function hasTextDecoder(encoding = 'utf-8') {
-  if (typeof encoding !== 'string')
-    throw new errors.Error('ERR_INVALID_ARG_TYPE', 'encoding', 'string');
-  return hasConverter(getEncodingFromLabel(encoding));
-}
 
 function makeTextDecoderICU() {
   const {
     decode: _decode,
     getConverter,
-    hasConverter
-  } = process.binding('icu');
+  } = internalBinding('icu');
 
   class TextDecoder {
     constructor(encoding = 'utf-8', options = {}) {
       encoding = `${encoding}`;
-      if (typeof options !== 'object')
-        throw new errors.Error('ERR_INVALID_ARG_TYPE', 'options', 'object');
+      validateArgument(options, 'object', 'options', 'Object');
 
       const enc = getEncodingFromLabel(encoding);
       if (enc === undefined)
-        throw new errors.RangeError('ERR_ENCODING_NOT_SUPPORTED', encoding);
+        throw new ERR_ENCODING_NOT_SUPPORTED(encoding);
 
       var flags = 0;
       if (options !== null) {
@@ -359,7 +369,7 @@ function makeTextDecoderICU() {
 
       const handle = getConverter(enc, flags);
       if (handle === undefined)
-        throw new errors.Error('ERR_ENCODING_NOT_SUPPORTED', encoding);
+        throw new ERR_ENCODING_NOT_SUPPORTED(encoding);
 
       this[kDecoder] = true;
       this[kHandle] = handle;
@@ -369,17 +379,15 @@ function makeTextDecoderICU() {
 
 
     decode(input = empty, options = {}) {
-      if (this == null || this[kDecoder] !== true)
-        throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+      validateDecoder(this);
       if (isArrayBuffer(input)) {
         input = lazyBuffer().from(input);
       } else if (!isArrayBufferView(input)) {
-        throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'input',
-                                   ['ArrayBuffer', 'ArrayBufferView']);
+        throw new ERR_INVALID_ARG_TYPE('input',
+                                       ['ArrayBuffer', 'ArrayBufferView'],
+                                       input);
       }
-      if (typeof options !== 'object') {
-        throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'options', 'object');
-      }
+      validateArgument(options, 'object', 'options', 'Object');
 
       var flags = 0;
       if (options !== null)
@@ -387,8 +395,7 @@ function makeTextDecoderICU() {
 
       const ret = _decode(this[kHandle], input, flags);
       if (typeof ret === 'number') {
-        const err = new errors.TypeError('ERR_ENCODING_INVALID_ENCODED_DATA',
-                                         this.encoding);
+        const err = new ERR_ENCODING_INVALID_ENCODED_DATA(this.encoding);
         err.errno = ret;
         throw err;
       }
@@ -396,7 +403,7 @@ function makeTextDecoderICU() {
     }
   }
 
-  return { hasConverter, TextDecoder };
+  return TextDecoder;
 }
 
 function makeTextDecoderJS() {
@@ -416,17 +423,16 @@ function makeTextDecoderJS() {
   class TextDecoder {
     constructor(encoding = 'utf-8', options = {}) {
       encoding = `${encoding}`;
-      if (typeof options !== 'object')
-        throw new errors.Error('ERR_INVALID_ARG_TYPE', 'options', 'object');
+      validateArgument(options, 'object', 'options', 'Object');
 
       const enc = getEncodingFromLabel(encoding);
       if (enc === undefined || !hasConverter(enc))
-        throw new errors.RangeError('ERR_ENCODING_NOT_SUPPORTED', encoding);
+        throw new ERR_ENCODING_NOT_SUPPORTED(encoding);
 
       var flags = 0;
       if (options !== null) {
         if (options.fatal) {
-          throw new errors.TypeError('ERR_NO_ICU', '"fatal" option');
+          throw new ERR_NO_ICU('"fatal" option');
         }
         flags |= options.ignoreBOM ? CONVERTER_FLAGS_IGNORE_BOM : 0;
       }
@@ -440,20 +446,18 @@ function makeTextDecoderJS() {
     }
 
     decode(input = empty, options = {}) {
-      if (this == null || this[kDecoder] !== true)
-        throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+      validateDecoder(this);
       if (isArrayBuffer(input)) {
         input = lazyBuffer().from(input);
       } else if (isArrayBufferView(input)) {
         input = lazyBuffer().from(input.buffer, input.byteOffset,
                                   input.byteLength);
       } else {
-        throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'input',
-                                   ['ArrayBuffer', 'ArrayBufferView']);
+        throw new ERR_INVALID_ARG_TYPE('input',
+                                       ['ArrayBuffer', 'ArrayBufferView'],
+                                       input);
       }
-      if (typeof options !== 'object') {
-        throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'options', 'object');
-      }
+      validateArgument(options, 'object', 'options', 'Object');
 
       if (this[kFlags] & CONVERTER_FLAGS_FLUSH) {
         this[kBOMSeen] = false;
@@ -487,7 +491,7 @@ function makeTextDecoderJS() {
     }
   }
 
-  return { hasConverter, TextDecoder };
+  return TextDecoder;
 }
 
 // Mix in some shared properties.
@@ -496,27 +500,23 @@ function makeTextDecoderJS() {
     TextDecoder.prototype,
     Object.getOwnPropertyDescriptors({
       get encoding() {
-        if (this == null || this[kDecoder] !== true)
-          throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+        validateDecoder(this);
         return this[kEncoding];
       },
 
       get fatal() {
-        if (this == null || this[kDecoder] !== true)
-          throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+        validateDecoder(this);
         return (this[kFlags] & CONVERTER_FLAGS_FATAL) === CONVERTER_FLAGS_FATAL;
       },
 
       get ignoreBOM() {
-        if (this == null || this[kDecoder] !== true)
-          throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+        validateDecoder(this);
         return (this[kFlags] & CONVERTER_FLAGS_IGNORE_BOM) ===
                CONVERTER_FLAGS_IGNORE_BOM;
       },
 
       [inspect](depth, opts) {
-        if (this == null || this[kDecoder] !== true)
-          throw new errors.TypeError('ERR_INVALID_THIS', 'TextDecoder');
+        validateDecoder(this);
         if (typeof depth === 'number' && depth < 0)
           return opts.stylize('[Object]', 'special');
         var ctor = getConstructorOf(this);
@@ -546,7 +546,6 @@ function makeTextDecoderJS() {
 
 module.exports = {
   getEncodingFromLabel,
-  hasTextDecoder,
   TextDecoder,
   TextEncoder
 };

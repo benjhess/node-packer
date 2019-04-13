@@ -29,9 +29,13 @@ assert(commonTemplate.test(process.versions.node));
 assert(commonTemplate.test(process.versions.uv));
 assert(commonTemplate.test(process.versions.zlib));
 
-assert(/^\d+\.\d+\.\d+(?:\.\d+)?(?: \(candidate\))?$/
+assert(/^\d+\.\d+\.\d+(?:\.\d+)?-node\.\d+(?: \(candidate\))?$/
   .test(process.versions.v8));
 assert(/^\d+$/.test(process.versions.modules));
+
+if (common.hasCrypto) {
+  assert(/^\d+\.\d+\.\d+[a-z]?(-fips)?$/.test(process.versions.openssl));
+}
 
 for (let i = 0; i < expected_keys.length; i++) {
   const key = expected_keys[i];

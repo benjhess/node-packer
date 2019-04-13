@@ -1,8 +1,6 @@
 #include "node.h"
-#include "env.h"
 #include "env-inl.h"
 #include "string_bytes.h"
-#include "util.h"
 #include "util-inl.h"
 #include "v8.h"
 
@@ -96,7 +94,7 @@ enum encoding ParseEncoding(Isolate* isolate,
   if (!encoding_v->IsString())
     return default_encoding;
 
-  node::Utf8Value encoding(isolate, encoding_v);
+  Utf8Value encoding(isolate, encoding_v);
 
   return ParseEncoding(*encoding, default_encoding);
 }
@@ -123,7 +121,7 @@ ssize_t DecodeBytes(Isolate* isolate,
                     enum encoding encoding) {
   HandleScope scope(isolate);
 
-  return StringBytes::Size(isolate, val, encoding);
+  return StringBytes::Size(isolate, val, encoding).FromMaybe(-1);
 }
 
 // Returns number of bytes written.

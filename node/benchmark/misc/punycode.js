@@ -4,7 +4,7 @@ const common = require('../common.js');
 let icu;
 try {
   icu = process.binding('icu');
-} catch (err) {}
+} catch {}
 const punycode = require('punycode');
 
 const bench = common.createBenchmark(main, {
@@ -55,17 +55,14 @@ function runPunycode(n, val) {
 }
 
 function runICU(n, val) {
-  var i = 0;
   bench.start();
-  for (; i < n; i++)
+  for (var i = 0; i < n; i++)
     usingICU(val);
   bench.end(n);
 }
 
-function main(conf) {
-  const n = +conf.n;
-  const val = conf.val;
-  switch (conf.method) {
+function main({ n, val, method }) {
+  switch (method) {
     // '' is a default case for tests
     case '':
     case 'punycode':
@@ -78,6 +75,6 @@ function main(conf) {
       }
       // fallthrough
     default:
-      throw new Error('Unexpected method');
+      throw new Error(`Unexpected method "${method}"`);
   }
 }

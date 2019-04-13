@@ -22,14 +22,9 @@
 'use strict';
 const common = require('../common');
 const fixtures = require('../common/fixtures');
-const tmpdir = require('../common/tmpdir');
 const assert = require('assert');
 const net = require('net');
 const repl = require('repl');
-
-common.globalCheck = false;
-tmpdir.refresh();
-common.crashOnUnhandledRejection();
 
 const message = 'Read, Eval, Print Loop';
 const prompt_unix = 'node via Unix socket> ';
@@ -42,7 +37,6 @@ const moduleFilename = fixtures.path('a');
 global.invoke_me = function(arg) {
   return `invoked ${arg}`;
 };
-
 
 // Helpers for describing the expected output:
 const kArrow = /^ *\^+ *$/;  // Arrow of ^ pointing to syntax error location
@@ -138,7 +132,11 @@ const errorTests = [
   // Uncaught error throws and prints out
   {
     send: 'throw new Error(\'test error\');',
-    expect: /^Error: test error/
+    expect: 'Error: test error'
+  },
+  {
+    send: "throw { foo: 'bar' };",
+    expect: "Thrown: { foo: 'bar' }"
   },
   // Common syntax error is treated as multiline command
   {
@@ -168,13 +166,11 @@ const errorTests = [
   // Template expressions
   {
     send: '`io.js ${"1.0"',
-    expect: [
-      kSource,
-      kArrow,
-      '',
-      /^SyntaxError: /,
-      ''
-    ]
+    expect: '... '
+  },
+  {
+    send: '+ ".2"}`',
+    expect: '\'io.js 1.0.2\''
   },
   {
     send: '`io.js ${',
@@ -321,6 +317,15 @@ const errorTests = [
     send: '1 }',
     expect: '{ a: 1 }'
   },
+  // Multiline string-keyed object (e.g. JSON)
+  {
+    send: '{ "a": ',
+    expect: '... '
+  },
+  {
+    send: '1 }',
+    expect: '{ a: 1 }'
+  },
   // Multiline anonymous function with comment
   {
     send: '(function() {',
@@ -455,7 +460,7 @@ const errorTests = [
     send: '/(.)(.)(.)(.)(.)(.)(.)(.)(.)/.test(\'123456789\')\n',
     expect: 'true'
   },
-  // the following test's result depends on the RegEx's match from the above
+  // the following test's result depends on the RegExp's match from the above
   {
     send: 'RegExp.$1\nRegExp.$2\nRegExp.$3\nRegExp.$4\nRegExp.$5\n' +
           'RegExp.$6\nRegExp.$7\nRegExp.$8\nRegExp.$9\n',
@@ -525,7 +530,7 @@ const errorTests = [
   {
     send: 'require("internal/repl")',
     expect: [
-      /^Error: Cannot find module 'internal\/repl'/,
+      /^{ Error: Cannot find module 'internal\/repl'/,
       /^    at .*/,
       /^    at .*/,
       /^    at .*/,
@@ -632,6 +637,16 @@ const errorTests = [
   {
     send: '(function() {\nif (false) {} /bar"/;\n}())',
     expect: '... ... undefined'
+  },
+
+  // https://github.com/nodejs/node/issues/16483
+  {
+    send: 'new Proxy({x:42}, {get(){throw null}});',
+    expect: 'Proxy [ { x: 42 }, { get: [Function: get] } ]'
+  },
+  {
+    send: 'repl.writer.options.showProxy = false, new Proxy({x:42}, {});',
+    expect: '{ x: 42 }'
   },
 
   // Newline within template string maintains whitespace.
@@ -747,6 +762,7 @@ const tcpTests = [
 
     socket.end();
   }
+  common.allowGlobals(...Object.values(global));
 })();
 
 function startTCPRepl() {
@@ -768,8 +784,8 @@ function startTCPRepl() {
     client.setEncoding('utf8');
 
     client.on('connect', common.mustCall(() => {
-      assert.strictEqual(true, client.readable);
-      assert.strictEqual(true, client.writable);
+      assert.strictEqual(client.readable, true);
+      assert.strictEqual(client.writable, true);
 
       resolveSocket(client);
     }));
@@ -811,8 +827,8 @@ function startUnixRepl() {
     client.setEncoding('utf8');
 
     client.on('connect', common.mustCall(() => {
-      assert.strictEqual(true, client.readable);
-      assert.strictEqual(true, client.writable);
+      assert.strictEqual(client.readable, true);
+      assert.strictEqual(client.writable, true);
 
       resolveSocket(client);
     }));

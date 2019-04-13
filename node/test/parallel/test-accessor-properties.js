@@ -30,28 +30,30 @@ const UDP = process.binding('udp_wrap').UDP;
     UDP.prototype.fd;
   }, TypeError);
 
+  const StreamWrapProto = Object.getPrototypeOf(TTY.prototype);
+
   // Should not throw for Object.getOwnPropertyDescriptor
   assert.strictEqual(
-    typeof Object.getOwnPropertyDescriptor(TTY.prototype, 'bytesRead'),
+    typeof Object.getOwnPropertyDescriptor(StreamWrapProto, 'bytesRead'),
     'object'
   );
 
   assert.strictEqual(
-    typeof Object.getOwnPropertyDescriptor(TTY.prototype, 'fd'),
+    typeof Object.getOwnPropertyDescriptor(StreamWrapProto, 'fd'),
     'object'
   );
 
   assert.strictEqual(
-    typeof Object.getOwnPropertyDescriptor(TTY.prototype, '_externalStream'),
+    typeof Object.getOwnPropertyDescriptor(StreamWrapProto, '_externalStream'),
     'object'
   );
 
   assert.strictEqual(
-    typeof Object.getOwnPropertyDescriptor(UDP.prototype, 'fd'),
+    typeof Object.getOwnPropertyDescriptor(StreamWrapProto, 'fd'),
     'object'
   );
 
-  if (common.hasCrypto) { // eslint-disable-line crypto-check
+  if (common.hasCrypto) { // eslint-disable-line node-core/crypto-check
     // There are accessor properties in crypto too
     const crypto = process.binding('crypto');
 
@@ -59,19 +61,9 @@ const UDP = process.binding('udp_wrap').UDP;
       crypto.SecureContext.prototype._external;
     }, TypeError);
 
-    assert.throws(() => {
-      crypto.Connection.prototype._external;
-    }, TypeError);
-
     assert.strictEqual(
       typeof Object.getOwnPropertyDescriptor(
         crypto.SecureContext.prototype, '_external'),
-      'object'
-    );
-
-    assert.strictEqual(
-      typeof Object.getOwnPropertyDescriptor(
-        crypto.Connection.prototype, '_external'),
       'object'
     );
   }

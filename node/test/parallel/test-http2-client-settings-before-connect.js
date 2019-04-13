@@ -51,7 +51,7 @@ server.listen(0, common.mustCall(() => {
       {
         type: TypeError,
         code: 'ERR_INVALID_CALLBACK',
-        message: 'callback must be a function'
+        message: 'Callback must be a function'
       }
     )
   );

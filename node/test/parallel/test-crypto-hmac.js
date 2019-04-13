@@ -6,13 +6,39 @@ if (!common.hasCrypto)
 const assert = require('assert');
 const crypto = require('crypto');
 
-// Test for binding layer robustness
 {
-  const binding = process.binding('crypto');
-  const h = new binding.Hmac();
-  // Fail to init the Hmac with an algorithm.
-  assert.throws(() => h.update('hello'), /^TypeError: HmacUpdate fail$/);
+  const Hmac = crypto.Hmac;
+  const instance = crypto.Hmac('sha256', 'Node');
+  assert(instance instanceof Hmac, 'Hmac is expected to return a new instance' +
+                                   ' when called without `new`');
 }
+
+common.expectsError(
+  () => crypto.createHmac(null),
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError,
+    message: 'The "hmac" argument must be of type string. Received type object'
+  });
+
+// This used to segfault. See: https://github.com/nodejs/node/issues/9819
+common.expectsError(
+  () => crypto.createHmac('sha256', 'key').digest({
+    toString: () => { throw new Error('boom'); },
+  }),
+  {
+    type: Error,
+    message: 'boom'
+  });
+
+common.expectsError(
+  () => crypto.createHmac('sha1', null),
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError,
+    message: 'The "key" argument must be one of type string, TypedArray, or ' +
+             'DataView. Received type object'
+  });
 
 {
   // Test HMAC
@@ -396,9 +422,12 @@ for (let i = 0, l = rfc2202_sha1.length; i < l; i++) {
   );
 }
 
-assert.throws(function() {
-  crypto.createHmac('sha256', 'w00t').digest('ucs2');
-}, /^Error: hmac\.digest\(\) does not support UTF-16$/);
+common.expectsError(
+  () => crypto.createHmac('sha256', 'w00t').digest('ucs2'),
+  {
+    code: 'ERR_CRYPTO_HASH_DIGEST_NO_UTF16',
+    type: Error
+  });
 
 // Check initialized -> uninitialized state transition after calling digest().
 {

@@ -3,6 +3,7 @@ const common = require('../common');
 const assert = require('assert');
 const cp = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 const CODE = `
   process.binding("trace_events").emit(
@@ -18,21 +19,21 @@ const CODE = `
     'b'.charCodeAt(0), 'missing',
     'type-value', 10, 'extra-value', 20);
 `;
-const FILE_NAME = 'node_trace.1.log';
 
 const tmpdir = require('../common/tmpdir');
 tmpdir.refresh();
-process.chdir(tmpdir.path);
+const FILE_NAME = path.join(tmpdir.path, 'node_trace.1.log');
 
 const proc = cp.spawn(process.execPath,
-                      [ '--trace-events-enabled',
-                        '--trace-event-categories', 'custom',
-                        '-e', CODE ]);
+                      [ '--trace-event-categories', 'custom',
+                        '-e', CODE ],
+                      { cwd: tmpdir.path });
 
 proc.once('exit', common.mustCall(() => {
-  assert(common.fileExists(FILE_NAME));
+  assert(fs.existsSync(FILE_NAME));
   fs.readFile(FILE_NAME, common.mustCall((err, data) => {
-    const traces = JSON.parse(data.toString()).traceEvents;
+    const traces = JSON.parse(data.toString()).traceEvents
+      .filter((trace) => trace.cat !== '__metadata');
     assert.strictEqual(traces.length, 3);
 
     assert.strictEqual(traces[0].pid, proc.pid);

@@ -32,9 +32,7 @@ const options = {
   host: '127.0.0.1',
 };
 
-//http.globalAgent.maxSockets = 15;
-
-const server = http.createServer(function(req, res) {
+const server = http.createServer((req, res) => {
   const m = /\/(.*)/.exec(req.url);
   const reqid = parseInt(m[1], 10);
   if (reqid % 2) {
@@ -53,7 +51,7 @@ server.listen(0, options.host, function() {
     options.path = `/${requests_sent}`;
     const req = http.request(options);
     req.id = requests_sent;
-    req.on('response', function(res) {
+    req.on('response', (res) => {
       res.on('data', function(data) {
         console.log(`res#${this.req.id} data:${data}`);
       });
@@ -80,7 +78,7 @@ server.listen(0, options.host, function() {
 
   setTimeout(function maybeDone() {
     if (requests_done >= requests_sent) {
-      setTimeout(function() {
+      setTimeout(() => {
         server.close();
       }, 100);
     } else {
@@ -89,8 +87,8 @@ server.listen(0, options.host, function() {
   }, 100);
 });
 
-process.on('exit', function() {
+process.on('exit', () => {
   console.error(`done=${requests_done} sent=${requests_sent}`);
-  assert.strictEqual(requests_done, requests_sent,
-                     'timeout on http request called too much');
+  // check that timeout on http request was not called too much
+  assert.strictEqual(requests_done, requests_sent);
 });

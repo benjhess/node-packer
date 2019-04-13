@@ -8,7 +8,7 @@ const requirementsURL =
   'https://github.com/nodejs/node/blob/master/doc/guides/writing-and-running-benchmarks.md#http-benchmark-requirements';
 
 // The port used by servers and wrk
-exports.PORT = process.env.PORT || 12346;
+exports.PORT = Number(process.env.PORT) || 12346;
 
 class AutocannonBenchmarker {
   constructor() {
@@ -35,7 +35,7 @@ class AutocannonBenchmarker {
     let result;
     try {
       result = JSON.parse(output);
-    } catch (err) {
+    } catch {
       return undefined;
     }
     if (!result || !result.requests || !result.requests.average) {
@@ -105,7 +105,7 @@ class TestDoubleBenchmarker {
     let result;
     try {
       result = JSON.parse(output);
-    } catch (err) {
+    } catch {
       return undefined;
     }
     return result.throughput;
@@ -185,7 +185,7 @@ exports.run = function(options, callback) {
     port: exports.PORT,
     path: '/',
     connections: 100,
-    duration: 10,
+    duration: 5,
     benchmarker: exports.default_http_benchmarker
   }, options);
   if (!options.benchmarker) {

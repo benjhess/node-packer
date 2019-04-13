@@ -1,8 +1,6 @@
 #include "node_internals.h"
 #include "node_perf.h"
 
-#include <vector>
-
 #ifdef __POSIX__
 #include <sys/time.h>  // gettimeofday
 #endif
@@ -11,19 +9,25 @@ namespace node {
 namespace performance {
 
 using v8::Array;
-using v8::ArrayBuffer;
 using v8::Context;
+using v8::DontDelete;
 using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
+using v8::GCCallbackFlags;
+using v8::GCType;
 using v8::HandleScope;
 using v8::Integer;
 using v8::Isolate;
 using v8::Local;
 using v8::Name;
+using v8::NewStringType;
 using v8::Number;
 using v8::Object;
+using v8::PropertyAttribute;
+using v8::ReadOnly;
 using v8::String;
+using v8::Uint32Array;
 using v8::Value;
 
 // Microseconds in a second, as a float.
@@ -38,8 +42,14 @@ const double timeOriginTimestamp = GetCurrentTimeInMicroseconds();
 uint64_t performance_node_start;
 uint64_t performance_v8_start;
 
-uint64_t performance_last_gc_start_mark_ = 0;
-v8::GCType performance_last_gc_type_ = v8::GCType::kGCTypeAll;
+void performance_state::Mark(enum PerformanceMilestone milestone,
+                             uint64_t ts) {
+  this->milestones[milestone] = ts;
+  TRACE_EVENT_INSTANT_WITH_TIMESTAMP0(
+      TRACING_CATEGORY_NODE1(bootstrap),
+      GetPerformanceMilestoneName(milestone),
+      TRACE_EVENT_SCOPE_THREAD, ts / 1000);
+}
 
 double GetCurrentTimeInMicroseconds() {
 #ifdef _WIN32
@@ -63,26 +73,30 @@ inline void InitObject(const PerformanceEntry& entry, Local<Object> obj) {
   Environment* env = entry.env();
   Isolate* isolate = env->isolate();
   Local<Context> context = env->context();
-  v8::PropertyAttribute attr =
-      static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
+  PropertyAttribute attr =
+      static_cast<PropertyAttribute>(ReadOnly | DontDelete);
   obj->DefineOwnProperty(context,
                          env->name_string(),
                          String::NewFromUtf8(isolate,
                                              entry.name().c_str(),
-                                             String::kNormalString),
-                         attr).FromJust();
+                                             NewStringType::kNormal)
+                             .ToLocalChecked(),
+                         attr)
+      .FromJust();
   obj->DefineOwnProperty(context,
-                         FIXED_ONE_BYTE_STRING(isolate, "entryType"),
+                         env->entry_type_string(),
                          String::NewFromUtf8(isolate,
                                              entry.type().c_str(),
-                                             String::kNormalString),
-                         attr).FromJust();
+                                             NewStringType::kNormal)
+                             .ToLocalChecked(),
+                         attr)
+      .FromJust();
   obj->DefineOwnProperty(context,
-                         FIXED_ONE_BYTE_STRING(isolate, "startTime"),
+                         env->start_time_string(),
                          Number::New(isolate, entry.startTime()),
                          attr).FromJust();
   obj->DefineOwnProperty(context,
-                         FIXED_ONE_BYTE_STRING(isolate, "duration"),
+                         env->duration_string(),
                          Number::New(isolate, entry.duration()),
                          attr).FromJust();
 }
@@ -114,15 +128,15 @@ void PerformanceEntry::Notify(Environment* env,
                               PerformanceEntryType type,
                               Local<Value> object) {
   Context::Scope scope(env->context());
-  AliasedBuffer<uint32_t, v8::Uint32Array>& observers =
+  AliasedBuffer<uint32_t, Uint32Array>& observers =
       env->performance_state()->observers;
   if (type != NODE_PERFORMANCE_ENTRY_TYPE_INVALID &&
       observers[type]) {
     node::MakeCallback(env->isolate(),
-                       env->process_object(),
+                       object.As<Object>(),
                        env->performance_entry_callback(),
                        1, &object,
-                       node::async_context{0, 0}).ToLocalChecked();
+                       node::async_context{0, 0});
   }
 }
 
@@ -135,8 +149,9 @@ void Mark(const FunctionCallbackInfo<Value>& args) {
   auto marks = env->performance_marks();
   (*marks)[*name] = now;
 
-  // TODO(jasnell): Once Tracing API is fully implemented, this should
-  // record a trace event also.
+  TRACE_EVENT_COPY_MARK_WITH_TIMESTAMP(
+      TRACING_CATEGORY_NODE2(perf, usertiming),
+      *name, now / 1000);
 
   PerformanceEntry entry(env, *name, "mark", now, now);
   Local<Object> obj = entry.ToObject();
@@ -144,6 +159,17 @@ void Mark(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(obj);
 }
 
+void ClearMark(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args);
+  auto marks = env->performance_marks();
+
+  if (args.Length() == 0) {
+    marks->clear();
+  } else {
+    Utf8Value name(env->isolate(), args[0]);
+    marks->erase(*name);
+  }
+}
 
 inline uint64_t GetPerformanceMark(Environment* env, std::string name) {
   auto marks = env->performance_marks();
@@ -183,8 +209,12 @@ void Measure(const FunctionCallbackInfo<Value>& args) {
   if (endTimestamp < startTimestamp)
     endTimestamp = startTimestamp;
 
-  // TODO(jasnell): Once Tracing API is fully implemented, this should
-  // record a trace event also.
+  TRACE_EVENT_COPY_NESTABLE_ASYNC_BEGIN_WITH_TIMESTAMP0(
+      TRACING_CATEGORY_NODE2(perf, usertiming),
+      *name, *name, startTimestamp / 1000);
+  TRACE_EVENT_COPY_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
+      TRACING_CATEGORY_NODE2(perf, usertiming),
+      *name, *name, endTimestamp / 1000);
 
   PerformanceEntry entry(env, *name, "measure", startTimestamp, endTimestamp);
   Local<Object> obj = entry.ToObject();
@@ -196,14 +226,11 @@ void Measure(const FunctionCallbackInfo<Value>& args) {
 void MarkMilestone(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   Local<Context> context = env->context();
-  AliasedBuffer<double, v8::Float64Array>& milestones =
-      env->performance_state()->milestones;
   PerformanceMilestone milestone =
       static_cast<PerformanceMilestone>(
           args[0]->Int32Value(context).ToChecked());
-  if (milestone != NODE_PERFORMANCE_MILESTONE_INVALID) {
-    milestones[milestone] = PERFORMANCE_NOW();
-  }
+  if (milestone != NODE_PERFORMANCE_MILESTONE_INVALID)
+    env->performance_state()->Mark(milestone);
 }
 
 
@@ -214,61 +241,59 @@ void SetupPerformanceObservers(const FunctionCallbackInfo<Value>& args) {
 }
 
 // Creates a GC Performance Entry and passes it to observers
-void PerformanceGCCallback(uv_async_t* handle) {
-  GCPerformanceEntry* entry = static_cast<GCPerformanceEntry*>(handle->data);
-  Environment* env = entry->env();
+void PerformanceGCCallback(Environment* env, void* ptr) {
+  GCPerformanceEntry* entry = static_cast<GCPerformanceEntry*>(ptr);
   HandleScope scope(env->isolate());
   Local<Context> context = env->context();
 
-  AliasedBuffer<uint32_t, v8::Uint32Array>& observers =
+  AliasedBuffer<uint32_t, Uint32Array>& observers =
       env->performance_state()->observers;
   if (observers[NODE_PERFORMANCE_ENTRY_TYPE_GC]) {
     Local<Object> obj = entry->ToObject();
-    v8::PropertyAttribute attr =
-        static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
+    PropertyAttribute attr =
+        static_cast<PropertyAttribute>(ReadOnly | DontDelete);
     obj->DefineOwnProperty(context,
-                           FIXED_ONE_BYTE_STRING(env->isolate(), "kind"),
+                           env->kind_string(),
                            Integer::New(env->isolate(), entry->gckind()),
                            attr).FromJust();
     PerformanceEntry::Notify(env, entry->kind(), obj);
   }
 
   delete entry;
-  auto closeCB = [](uv_handle_t* handle) {
-    delete reinterpret_cast<uv_async_t*>(handle);
-  };
-  uv_close(reinterpret_cast<uv_handle_t*>(handle), closeCB);
 }
 
 // Marks the start of a GC cycle
 void MarkGarbageCollectionStart(Isolate* isolate,
-                                v8::GCType type,
-                                v8::GCCallbackFlags flags) {
-  performance_last_gc_start_mark_ = PERFORMANCE_NOW();
-  performance_last_gc_type_ = type;
+                                GCType type,
+                                GCCallbackFlags flags,
+                                void* data) {
+  Environment* env = static_cast<Environment*>(data);
+  env->performance_state()->performance_last_gc_start_mark = PERFORMANCE_NOW();
 }
 
 // Marks the end of a GC cycle
 void MarkGarbageCollectionEnd(Isolate* isolate,
-                              v8::GCType type,
-                              v8::GCCallbackFlags flags,
+                              GCType type,
+                              GCCallbackFlags flags,
                               void* data) {
   Environment* env = static_cast<Environment*>(data);
-  uv_async_t* async = new uv_async_t();
-  if (uv_async_init(env->event_loop(), async, PerformanceGCCallback))
-    return delete async;
-  uv_unref(reinterpret_cast<uv_handle_t*>(async));
-  async->data =
+  performance_state* state = env->performance_state();
+  // If no one is listening to gc performance entries, do not create them.
+  if (!state->observers[NODE_PERFORMANCE_ENTRY_TYPE_GC])
+    return;
+  GCPerformanceEntry* entry =
       new GCPerformanceEntry(env,
                              static_cast<PerformanceGCKind>(type),
-                             performance_last_gc_start_mark_,
+                             state->performance_last_gc_start_mark,
                              PERFORMANCE_NOW());
-  CHECK_EQ(0, uv_async_send(async));
+  env->SetUnrefImmediate(PerformanceGCCallback,
+                         entry);
 }
 
 
 inline void SetupGarbageCollectionTracking(Environment* env) {
-  env->isolate()->AddGCPrologueCallback(MarkGarbageCollectionStart);
+  env->isolate()->AddGCPrologueCallback(MarkGarbageCollectionStart,
+                                        static_cast<void*>(env));
   env->isolate()->AddGCEpilogueCallback(MarkGarbageCollectionEnd,
                                         static_cast<void*>(env));
 }
@@ -292,45 +317,38 @@ void TimerFunctionCall(const FunctionCallbackInfo<Value>& args) {
   Isolate* isolate = args.GetIsolate();
   HandleScope scope(isolate);
   Environment* env = Environment::GetCurrent(isolate);
+  CHECK_NOT_NULL(env);
   Local<Context> context = env->context();
   Local<Function> fn = args.Data().As<Function>();
   size_t count = args.Length();
   size_t idx;
-  std::vector<Local<Value>> call_args;
-  for (size_t i = 0; i < count; ++i)
-    call_args.push_back(args[i]);
-
+  SlicedArguments call_args(args);
   Utf8Value name(isolate, GetName(fn));
+  bool is_construct_call = args.IsConstructCall();
 
-  uint64_t start;
-  uint64_t end;
-  v8::TryCatch try_catch(isolate);
-  if (args.IsConstructCall()) {
-    start = PERFORMANCE_NOW();
-    v8::MaybeLocal<Object> ret = fn->NewInstance(context,
-                                                 call_args.size(),
-                                                 call_args.data());
-    end = PERFORMANCE_NOW();
-    if (ret.IsEmpty()) {
-      try_catch.ReThrow();
-      return;
-    }
-    args.GetReturnValue().Set(ret.ToLocalChecked());
+  uint64_t start = PERFORMANCE_NOW();
+  TRACE_EVENT_COPY_NESTABLE_ASYNC_BEGIN_WITH_TIMESTAMP0(
+      TRACING_CATEGORY_NODE2(perf, timerify),
+      *name, *name, start / 1000);
+  v8::MaybeLocal<Value> ret;
+
+  if (is_construct_call) {
+    ret = fn->NewInstance(context, call_args.size(), call_args.data())
+        .FromMaybe(Local<Object>());
   } else {
-    start = PERFORMANCE_NOW();
-    v8::MaybeLocal<Value> ret = fn->Call(context,
-                                         args.This(),
-                                         call_args.size(),
-                                         call_args.data());
-    end = PERFORMANCE_NOW();
-    if (ret.IsEmpty()) {
-      try_catch.ReThrow();
-      return;
-    }
-    args.GetReturnValue().Set(ret.ToLocalChecked());
+    ret = fn->Call(context, args.This(), call_args.size(), call_args.data());
   }
 
-  AliasedBuffer<uint32_t, v8::Uint32Array>& observers =
+  uint64_t end = PERFORMANCE_NOW();
+  TRACE_EVENT_COPY_NESTABLE_ASYNC_END_WITH_TIMESTAMP0(
+      TRACING_CATEGORY_NODE2(perf, timerify),
+      *name, *name, end / 1000);
+
+  if (ret.IsEmpty())
+    return;
+  args.GetReturnValue().Set(ret.ToLocalChecked());
+
+  AliasedBuffer<uint32_t, Uint32Array>& observers =
       env->performance_state()->observers;
   if (!observers[NODE_PERFORMANCE_ENTRY_TYPE_FUNCTION])
     return;
@@ -356,13 +374,12 @@ void Timerify(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void Init(Local<Object> target,
-          Local<Value> unused,
-          Local<Context> context) {
+void Initialize(Local<Object> target,
+                Local<Value> unused,
+                Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
   Isolate* isolate = env->isolate();
   performance_state* state = env->performance_state();
-  auto state_ab = ArrayBuffer::New(isolate, state, sizeof(*state));
 
   target->Set(context,
               FIXED_ONE_BYTE_STRING(isolate, "observerCounts"),
@@ -376,10 +393,11 @@ void Init(Local<Object> target,
 
   Local<FunctionTemplate> pe = FunctionTemplate::New(isolate);
   pe->SetClassName(performanceEntryString);
-  Local<Function> fn = pe->GetFunction();
+  Local<Function> fn = pe->GetFunction(context).ToLocalChecked();
   target->Set(context, performanceEntryString, fn).FromJust();
   env->set_performance_entry_template(fn);
 
+  env->SetMethod(target, "clearMark", ClearMark);
   env->SetMethod(target, "mark", Mark);
   env->SetMethod(target, "measure", Measure);
   env->SetMethod(target, "markMilestone", MarkMilestone);
@@ -403,18 +421,18 @@ void Init(Local<Object> target,
   NODE_PERFORMANCE_MILESTONES(V)
 #undef V
 
-  v8::PropertyAttribute attr =
-      static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
+  PropertyAttribute attr =
+      static_cast<PropertyAttribute>(ReadOnly | DontDelete);
 
   target->DefineOwnProperty(context,
                             FIXED_ONE_BYTE_STRING(isolate, "timeOrigin"),
-                            v8::Number::New(isolate, timeOrigin / 1e6),
+                            Number::New(isolate, timeOrigin / 1e6),
                             attr).ToChecked();
 
   target->DefineOwnProperty(
       context,
       FIXED_ONE_BYTE_STRING(isolate, "timeOriginTimestamp"),
-      v8::Number::New(isolate, timeOriginTimestamp / MICROS_PER_MILLIS),
+      Number::New(isolate, timeOriginTimestamp / MICROS_PER_MILLIS),
       attr).ToChecked();
 
   target->DefineOwnProperty(context,
@@ -428,4 +446,4 @@ void Init(Local<Object> target,
 }  // namespace performance
 }  // namespace node
 
-NODE_BUILTIN_MODULE_CONTEXT_AWARE(performance, node::performance::Init)
+NODE_BUILTIN_MODULE_CONTEXT_AWARE(performance, node::performance::Initialize)

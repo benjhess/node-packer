@@ -23,21 +23,19 @@ const errMessage = /^Bad socket type specified\. Valid types are: udp4, udp6$/;
 
 // Error must be thrown with invalid types
 invalidTypes.forEach((invalidType) => {
-  assert.throws(() => {
+  common.expectsError(() => {
     dgram.createSocket(invalidType);
-  }, common.expectsError({
+  }, {
     code: 'ERR_SOCKET_BAD_TYPE',
-    type: Error,
+    type: TypeError,
     message: errMessage
-  }));
+  });
 });
 
 // Error must not be thrown with valid types
 validTypes.forEach((validType) => {
-  assert.doesNotThrow(() => {
-    const socket = dgram.createSocket(validType);
-    socket.close();
-  });
+  const socket = dgram.createSocket(validType);
+  socket.close();
 });
 
 // Ensure buffer sizes can be set

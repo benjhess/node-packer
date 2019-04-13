@@ -53,23 +53,24 @@ struct Argv {
   int nr_args_;
 };
 
+using ArrayBufferUniquePtr = std::unique_ptr<node::ArrayBufferAllocator,
+      decltype(&node::FreeArrayBufferAllocator)>;
+using TracingAgentUniquePtr = std::unique_ptr<node::tracing::Agent>;
+using NodePlatformUniquePtr = std::unique_ptr<node::NodePlatform>;
 
 class NodeTestFixture : public ::testing::Test {
  protected:
-  static std::unique_ptr<v8::ArrayBuffer::Allocator> allocator;
-  static std::unique_ptr<v8::TracingController> tracing_controller;
-  static std::unique_ptr<node::NodePlatform> platform;
-  static v8::Isolate::CreateParams params;
+  static ArrayBufferUniquePtr allocator;
+  static TracingAgentUniquePtr tracing_agent;
+  static NodePlatformUniquePtr platform;
   static uv_loop_t current_loop;
   v8::Isolate* isolate_;
 
   static void SetUpTestCase() {
-    platform.reset(new node::NodePlatform(4, nullptr));
-    tracing_controller.reset(new v8::TracingController());
-    allocator.reset(v8::ArrayBuffer::Allocator::NewDefaultAllocator());
-    params.array_buffer_allocator = allocator.get();
-    node::tracing::TraceEventHelper::SetTracingController(
-        tracing_controller.get());
+    tracing_agent.reset(new node::tracing::Agent());
+    node::tracing::TraceEventHelper::SetAgent(tracing_agent.get());
+    platform.reset(
+        new node::NodePlatform(4, tracing_agent->GetTracingController()));
     CHECK_EQ(0, uv_loop_init(&current_loop));
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
@@ -85,7 +86,9 @@ class NodeTestFixture : public ::testing::Test {
   }
 
   virtual void SetUp() {
-    isolate_ = v8::Isolate::New(params);
+    allocator = ArrayBufferUniquePtr(node::CreateArrayBufferAllocator(),
+                                     &node::FreeArrayBufferAllocator);
+    isolate_ = NewIsolate(allocator.get());
     CHECK_NE(isolate_, nullptr);
   }
 
@@ -102,7 +105,7 @@ class EnvironmentTestFixture : public NodeTestFixture {
    public:
     Env(const v8::HandleScope& handle_scope, const Argv& argv) {
       auto isolate = handle_scope.GetIsolate();
-      context_ = v8::Context::New(isolate);
+      context_ = node::NewContext(isolate);
       CHECK(!context_.IsEmpty());
       context_->Enter();
 
@@ -118,7 +121,6 @@ class EnvironmentTestFixture : public NodeTestFixture {
     }
 
     ~Env() {
-      environment_->CleanupHandles();
       node::FreeEnvironment(environment_);
       node::FreeIsolateData(isolate_data_);
       context_->Exit();

@@ -12,6 +12,21 @@ It can be accessed using:
 const inspector = require('inspector');
 ```
 
+## inspector.close()
+
+Deactivate the inspector. Blocks until there are no active connections.
+
+## inspector.console
+
+* {Object} An object to send messages to the remote inspector console.
+
+```js
+require('inspector').console.log('a message');
+```
+
+The inspector console does not have API parity with Node.js
+console.
+
 ## inspector.open([port[, host[, wait]]])
 
 * `port` {number} Port to listen on for inspector connections. Optional.
@@ -28,11 +43,12 @@ started.
 If wait is `true`, will block until a client has connected to the inspect port
 and flow control has been passed to the debugger client.
 
-### inspector.close()
+See the [security warning](cli.html#inspector_security) regarding the `host`
+parameter usage.
 
-Deactivate the inspector. Blocks until there are no active connections.
+## inspector.url()
 
-### inspector.url()
+* Returns: {string|undefined}
 
 Return the URL of the active inspector, or `undefined` if there is none.
 
@@ -79,7 +95,7 @@ added: v8.0.0
 Emitted when an inspector notification is received that has its method field set
 to the `<inspector-protocol-method>` value.
 
-The following snippet installs a listener on the [`Debugger.paused`][]
+The following snippet installs a listener on the [`'Debugger.paused'`][]
 event, and prints the reason for program suspension whenever program
 execution is suspended (through breakpoints, for example):
 
@@ -99,14 +115,24 @@ Connects a session to the inspector back-end. An exception will be thrown
 if there is already a connected session established either through the API or by
 a front-end connected to the Inspector WebSocket port.
 
+### session.disconnect()
+<!-- YAML
+added: v8.0.0
+-->
+
+Immediately close the session. All pending message callbacks will be called
+with an error. [`session.connect()`] will need to be called to be able to send
+messages again. Reconnected session will lose all inspector state, such as
+enabled agents or configured breakpoints.
+
 ### session.post(method[, params][, callback])
 <!-- YAML
 added: v8.0.0
 -->
 
-* method {string}
-* params {Object}
-* callback {Function}
+* `method` {string}
+* `params` {Object}
+* `callback` {Function}
 
 Posts a message to the inspector back-end. `callback` will be notified when
 a response is received. `callback` is a function that accepts two optional
@@ -121,20 +147,10 @@ session.post('Runtime.evaluate', { expression: '2 + 2' },
 The latest version of the V8 inspector protocol is published on the
 [Chrome DevTools Protocol Viewer][].
 
-Node inspector supports all the Chrome DevTools Protocol domains declared
+Node.js inspector supports all the Chrome DevTools Protocol domains declared
 by V8. Chrome DevTools Protocol domain provides an interface for interacting
 with one of the runtime agents used to inspect the application state and listen
 to the run-time events.
-
-### session.disconnect()
-<!-- YAML
-added: v8.0.0
--->
-
-Immediately close the session. All pending message callbacks will be called
-with an error. [`session.connect()`] will need to be called to be able to send
-messages again. Reconnected session will lose all inspector state, such as
-enabled agents or configured breakpoints.
 
 ## Example usage
 
@@ -145,7 +161,7 @@ protocol. Here's a simple example showing how to use the [CPU profiler][]:
 
 ```js
 const inspector = require('inspector');
-
+const fs = require('fs');
 const session = new inspector.Session();
 session.connect();
 
@@ -154,16 +170,18 @@ session.post('Profiler.enable', () => {
     // invoke business logic under measurement here...
 
     // some time later...
-    session.post('Profiler.stop', ({ profile }) => {
+    session.post('Profiler.stop', (err, { profile }) => {
       // write profile to disk, upload, etc.
+      if (!err) {
+        fs.writeFileSync('./profile.cpuprofile', JSON.stringify(profile));
+      }
     });
   });
 });
 ```
 
-
-[`session.connect()`]: #inspector_session_connect
-[`Debugger.paused`]: https://chromedevtools.github.io/devtools-protocol/v8/Debugger/#event-paused
+[`'Debugger.paused'`]: https://chromedevtools.github.io/devtools-protocol/v8/Debugger#event-paused
 [`EventEmitter`]: events.html#events_class_eventemitter
-[Chrome DevTools Protocol Viewer]: https://chromedevtools.github.io/devtools-protocol/v8/
+[`session.connect()`]: #inspector_session_connect
 [CPU Profiler]: https://chromedevtools.github.io/devtools-protocol/v8/Profiler
+[Chrome DevTools Protocol Viewer]: https://chromedevtools.github.io/devtools-protocol/v8/

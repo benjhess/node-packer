@@ -1,8 +1,8 @@
+// Flags: --expose-internals
 'use strict';
 const common = require('../common');
 common.skipIfInspectorDisabled();
 common.skipIf32Bits();
-common.crashOnUnhandledRejection();
 const { NodeInstance } = require('../common/inspector-helper.js');
 const assert = require('assert');
 
@@ -44,7 +44,7 @@ async function runTests() {
   await checkAsyncStackTrace(session);
 
   await session.runToCompletion();
-  assert.strictEqual(55, (await instance.expectShutdown()).exitCode);
+  assert.strictEqual((await instance.expectShutdown()).exitCode, 55);
 }
 
 runTests();

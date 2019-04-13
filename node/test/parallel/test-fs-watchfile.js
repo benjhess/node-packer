@@ -8,17 +8,27 @@ const path = require('path');
 const tmpdir = require('../common/tmpdir');
 
 // Basic usage tests.
-assert.throws(function() {
-  fs.watchFile('./some-file');
-}, /^Error: "watchFile\(\)" requires a listener function$/);
+common.expectsError(
+  () => {
+    fs.watchFile('./some-file');
+  },
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError
+  });
 
-assert.throws(function() {
-  fs.watchFile('./another-file', {}, 'bad listener');
-}, /^Error: "watchFile\(\)" requires a listener function$/);
+common.expectsError(
+  () => {
+    fs.watchFile('./another-file', {}, 'bad listener');
+  },
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError
+  });
 
-assert.throws(function() {
+common.expectsError(function() {
   fs.watchFile(new Object(), common.mustNotCall());
-}, /Path must be a string/);
+}, { code: 'ERR_INVALID_ARG_TYPE', type: TypeError });
 
 const enoentFile = path.join(tmpdir.path, 'non-existent-file');
 const expectedStatObject = new fs.Stats(
@@ -64,10 +74,15 @@ const watcher =
       assert(prev.ino <= 0);
       // Stop watching the file
       fs.unwatchFile(enoentFile);
+      watcher.stop();  // stopping a stopped watcher should be a noop
     }
   }, 2));
 
-watcher.start();  // should not crash
+// 'stop' should only be emitted once - stopping a stopped watcher should
+// not trigger a 'stop' event.
+watcher.on('stop', common.mustCall(function onStop() {}));
+
+watcher.start();  // starting a started watcher should be a noop
 
 // Watch events should callback with a filename on supported systems.
 // Omitting AIX. It works but not reliably.

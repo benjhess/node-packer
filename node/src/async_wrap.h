@@ -24,21 +24,21 @@
 
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
-#include "base-object.h"
+#include "base_object.h"
 #include "v8.h"
-#include "node.h"
 
 #include <stdint.h>
 
 namespace node {
 
-#define NODE_ASYNC_ID_OFFSET 0xA1C
-
 #define NODE_ASYNC_NON_CRYPTO_PROVIDER_TYPES(V)                               \
   V(NONE)                                                                     \
   V(DNSCHANNEL)                                                               \
+  V(FILEHANDLE)                                                               \
+  V(FILEHANDLECLOSEREQ)                                                       \
   V(FSEVENTWRAP)                                                              \
   V(FSREQWRAP)                                                                \
+  V(FSREQPROMISE)                                                             \
   V(GETADDRINFOREQWRAP)                                                       \
   V(GETNAMEINFOREQWRAP)                                                       \
   V(HTTP2SESSION)                                                             \
@@ -47,6 +47,7 @@ namespace node {
   V(HTTP2SETTINGS)                                                            \
   V(HTTPPARSER)                                                               \
   V(JSSTREAM)                                                                 \
+  V(MESSAGEPORT)                                                              \
   V(PIPECONNECTWRAP)                                                          \
   V(PIPESERVERWRAP)                                                           \
   V(PIPEWRAP)                                                                 \
@@ -56,6 +57,7 @@ namespace node {
   V(SHUTDOWNWRAP)                                                             \
   V(SIGNALWRAP)                                                               \
   V(STATWATCHER)                                                              \
+  V(STREAMPIPE)                                                               \
   V(TCPCONNECTWRAP)                                                           \
   V(TCPSERVERWRAP)                                                            \
   V(TCPWRAP)                                                                  \
@@ -63,14 +65,16 @@ namespace node {
   V(TTYWRAP)                                                                  \
   V(UDPSENDWRAP)                                                              \
   V(UDPWRAP)                                                                  \
+  V(WORKER)                                                                   \
   V(WRITEWRAP)                                                                \
   V(ZLIB)
 
 #if HAVE_OPENSSL
 #define NODE_ASYNC_CRYPTO_PROVIDER_TYPES(V)                                   \
-  V(SSLCONNECTION)                                                            \
   V(PBKDF2REQUEST)                                                            \
+  V(KEYPAIRGENREQUEST)                                                        \
   V(RANDOMBYTESREQUEST)                                                       \
+  V(SCRYPTREQUEST)                                                            \
   V(TLSWRAP)
 #else
 #define NODE_ASYNC_CRYPTO_PROVIDER_TYPES(V)
@@ -101,11 +105,6 @@ class AsyncWrap : public BaseObject {
     PROVIDERS_LENGTH,
   };
 
-  enum Flags {
-    kFlagNone = 0x0,
-    kFlagHasReset = 0x1
-  };
-
   AsyncWrap(Environment* env,
             v8::Local<v8::Object> object,
             ProviderType provider,
@@ -113,9 +112,8 @@ class AsyncWrap : public BaseObject {
 
   virtual ~AsyncWrap();
 
-  static void AddWrapMethods(Environment* env,
-                             v8::Local<v8::FunctionTemplate> constructor,
-                             int flags = kFlagNone);
+  static v8::Local<v8::FunctionTemplate> GetConstructorTemplate(
+      Environment* env);
 
   static void Initialize(v8::Local<v8::Object> target,
                          v8::Local<v8::Value> unused,
@@ -124,8 +122,6 @@ class AsyncWrap : public BaseObject {
   static void GetAsyncId(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void PushAsyncIds(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void PopAsyncIds(const v8::FunctionCallbackInfo<v8::Value>& args);
-  static void ClearAsyncIdStack(
-    const v8::FunctionCallbackInfo<v8::Value>& args);
   static void AsyncReset(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void QueueDestroyAsyncId(
     const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -142,7 +138,7 @@ class AsyncWrap : public BaseObject {
   static void EmitPromiseResolve(Environment* env, double async_id);
 
   void EmitTraceEventBefore();
-  void EmitTraceEventAfter();
+  static void EmitTraceEventAfter(ProviderType type, double async_id);
   void EmitTraceEventDestroy();
 
 
@@ -159,30 +155,55 @@ class AsyncWrap : public BaseObject {
                                          int argc,
                                          v8::Local<v8::Value>* argv);
   inline v8::MaybeLocal<v8::Value> MakeCallback(
+      const v8::Local<v8::Symbol> symbol,
+      int argc,
+      v8::Local<v8::Value>* argv);
+  inline v8::MaybeLocal<v8::Value> MakeCallback(
       const v8::Local<v8::String> symbol,
       int argc,
       v8::Local<v8::Value>* argv);
-  inline v8::MaybeLocal<v8::Value> MakeCallback(uint32_t index,
-                                                int argc,
-                                                v8::Local<v8::Value>* argv);
+  inline v8::MaybeLocal<v8::Value> MakeCallback(
+      const v8::Local<v8::Name> symbol,
+      int argc,
+      v8::Local<v8::Value>* argv);
 
-  virtual size_t self_size() const = 0;
+  virtual std::string diagnostic_name() const;
+  virtual std::string MemoryInfoName() const;
 
   static void WeakCallback(const v8::WeakCallbackInfo<DestroyParam> &info);
+
+  // Returns the object that 'owns' an async wrap. For example, for a
+  // TCP connection handle, this is the corresponding net.Socket.
+  v8::Local<v8::Object> GetOwner();
+  static v8::Local<v8::Object> GetOwner(Environment* env,
+                                        v8::Local<v8::Object> obj);
+
+  // This is a simplified version of InternalCallbackScope that only runs
+  // the `before` and `after` hooks. Only use it when not actually calling
+  // back into JS; otherwise, use InternalCallbackScope.
+  class AsyncScope {
+   public:
+    explicit inline AsyncScope(AsyncWrap* wrap);
+    ~AsyncScope();
+
+   private:
+    AsyncWrap* wrap_ = nullptr;
+  };
 
  private:
   friend class PromiseWrap;
 
-  // This is specifically used by the PromiseWrap constructor.
-  AsyncWrap(Environment* env, v8::Local<v8::Object> promise, bool silent);
+  AsyncWrap(Environment* env,
+            v8::Local<v8::Object> promise,
+            ProviderType provider,
+            double execution_async_id,
+            bool silent);
   inline AsyncWrap();
   const ProviderType provider_type_;
   // Because the values may be Reset(), cannot be made const.
-  double async_id_;
+  double async_id_ = -1;
   double trigger_async_id_;
 };
-
-void LoadAsyncWrapperInfo(Environment* env);
 
 }  // namespace node
 

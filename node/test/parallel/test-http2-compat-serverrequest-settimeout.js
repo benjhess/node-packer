@@ -3,7 +3,6 @@
 const common = require('../common');
 if (!common.hasCrypto)
   common.skip('missing crypto');
-const assert = require('assert');
 const http2 = require('http2');
 
 const msecs = common.platformTimeout(1);
@@ -13,12 +12,11 @@ server.on('request', (req, res) => {
   req.setTimeout(msecs, common.mustCall(() => {
     res.end();
   }));
+  req.on('timeout', common.mustCall());
   res.on('finish', common.mustCall(() => {
     req.setTimeout(msecs, common.mustNotCall());
     process.nextTick(() => {
-      assert.doesNotThrow(
-        () => req.setTimeout(msecs, common.mustNotCall())
-      );
+      req.setTimeout(msecs, common.mustNotCall());
       server.close();
     });
   }));

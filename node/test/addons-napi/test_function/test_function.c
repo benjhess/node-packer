@@ -1,7 +1,7 @@
 #include <node_api.h>
 #include "../common.h"
 
-napi_value TestCallFunction(napi_env env, napi_callback_info info) {
+static napi_value TestCallFunction(napi_env env, napi_callback_info info) {
   size_t argc = 10;
   napi_value args[10];
   NAPI_CALL(env, napi_get_cb_info(env, info, &argc, args, NULL, NULL));
@@ -26,7 +26,7 @@ napi_value TestCallFunction(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value TestFunctionName(napi_env env, napi_callback_info info) {
+static napi_value TestFunctionName(napi_env env, napi_callback_info info) {
   return NULL;
 }
 

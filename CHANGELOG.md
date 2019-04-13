@@ -1,7 +1,8 @@
 # Node.js Compiler Changelog
 
 ## v1.6.0
-
+- upgrade Node.js runtime to v10.15.3
+  - https://nodejs.org/en/blog/release/v10.15.3/
 - upgrade Node.js runtime to v8.4.0
   - https://nodejs.org/en/blog/release/v8.4.0/
 - install to local directories of the current user in `--msi` generated Windows Installers

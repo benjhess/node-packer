@@ -21,6 +21,7 @@
 
 'use strict';
 const common = require('../common');
+const tmpdir = require('../common/tmpdir');
 
 const child_process = require('child_process');
 const assert = require('assert');
@@ -34,14 +35,14 @@ const rangeFile = fixtures.path('x.txt');
   let paused = false;
   let bytesRead = 0;
 
-  const file = fs.ReadStream(fn);
+  const file = fs.createReadStream(fn);
   const fileSize = fs.statSync(fn).size;
 
   assert.strictEqual(file.bytesRead, 0);
 
   file.on('open', common.mustCall(function(fd) {
     file.length = 0;
-    assert.strictEqual('number', typeof fd);
+    assert.strictEqual(typeof fd, 'number');
     assert.strictEqual(file.bytesRead, 0);
     assert.ok(file.readable);
 
@@ -90,12 +91,12 @@ const rangeFile = fixtures.path('x.txt');
   const file = fs.createReadStream(fn, { encoding: 'utf8' });
   file.length = 0;
   file.on('data', function(data) {
-    assert.strictEqual('string', typeof data);
+    assert.strictEqual(typeof data, 'string');
     file.length += data.length;
 
     for (let i = 0; i < data.length; i++) {
       // http://www.fileformat.info/info/unicode/char/2026/index.htm
-      assert.strictEqual('\u2026', data[i]);
+      assert.strictEqual(data[i], '\u2026');
     }
   });
 
@@ -141,9 +142,16 @@ const rangeFile = fixtures.path('x.txt');
   }));
 }
 
-assert.throws(function() {
-  fs.createReadStream(rangeFile, { start: 10, end: 2 });
-}, /"start" option must be <= "end" option/);
+common.expectsError(
+  () => {
+    fs.createReadStream(rangeFile, { start: 10, end: 2 });
+  },
+  {
+    code: 'ERR_OUT_OF_RANGE',
+    message: 'The value of "start" is out of range. It must be <= "end". ' +
+             'Received {start: 10, end: 2}',
+    type: RangeError
+  });
 
 {
   const stream = fs.createReadStream(rangeFile, { start: 0, end: 0 });
@@ -154,7 +162,7 @@ assert.throws(function() {
   });
 
   stream.on('end', common.mustCall(function() {
-    assert.strictEqual('x', stream.data);
+    assert.strictEqual(stream.data, 'x');
   }));
 }
 
@@ -168,7 +176,7 @@ assert.throws(function() {
   });
 
   stream.on('end', common.mustCall(function() {
-    assert.strictEqual('xy', stream.data);
+    assert.strictEqual(stream.data, 'xy');
   }));
 }
 
@@ -176,7 +184,6 @@ if (!common.isWindows) {
   // Verify that end works when start is not specified, and we do not try to
   // use positioned reads. This makes sure that this keeps working for
   // non-seekable file descriptors.
-  const tmpdir = require('../common/tmpdir');
   tmpdir.refresh();
   const filename = `${tmpdir.path}/foo.pipe`;
   const mkfifoResult = child_process.spawnSync('mkfifo', [filename]);
@@ -190,7 +197,7 @@ if (!common.isWindows) {
     });
 
     stream.on('end', common.mustCall(function() {
-      assert.strictEqual('xy', stream.data);
+      assert.strictEqual(stream.data, 'xy');
       fs.unlinkSync(filename);
     }));
   } else {

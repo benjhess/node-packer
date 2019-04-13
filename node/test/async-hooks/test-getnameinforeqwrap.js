@@ -7,11 +7,14 @@ const initHooks = require('./init-hooks');
 const { checkInvocations } = require('./hook-checks');
 const dns = require('dns');
 
+if (!common.isMainThread)
+  common.skip('Worker bootstrapping works differently -> different async IDs');
+
 const hooks = initHooks();
 
 hooks.enable();
 dns.lookupService('127.0.0.1', 80, common.mustCall(onlookupService));
-function onlookupService(err_, ip, family) {
+function onlookupService() {
   // we don't care about the error here in order to allow
   // tests to run offline (lookup will fail in that case and the err be set)
 

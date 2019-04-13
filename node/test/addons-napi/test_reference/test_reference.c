@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <node_api.h>
 #include "../common.h"
 
@@ -5,20 +6,20 @@ static int test_value = 1;
 static int finalize_count = 0;
 static napi_ref test_reference = NULL;
 
-napi_value GetFinalizeCount(napi_env env, napi_callback_info info) {
+static napi_value GetFinalizeCount(napi_env env, napi_callback_info info) {
   napi_value result;
   NAPI_CALL(env, napi_create_int32(env, finalize_count, &result));
   return result;
 }
 
-void FinalizeExternal(napi_env env, void* data, void* hint) {
+static void FinalizeExternal(napi_env env, void* data, void* hint) {
   int *actual_value = data;
   NAPI_ASSERT_RETURN_VOID(env, actual_value == &test_value,
       "The correct pointer was passed to the finalizer");
   finalize_count++;
 }
 
-napi_value CreateExternal(napi_env env, napi_callback_info info) {
+static napi_value CreateExternal(napi_env env, napi_callback_info info) {
   int* data = &test_value;
 
   napi_value result;
@@ -33,7 +34,8 @@ napi_value CreateExternal(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value CreateExternalWithFinalize(napi_env env, napi_callback_info info) {
+static napi_value
+CreateExternalWithFinalize(napi_env env, napi_callback_info info) {
   napi_value result;
   NAPI_CALL(env,
       napi_create_external(env,
@@ -46,7 +48,7 @@ napi_value CreateExternalWithFinalize(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value CheckExternal(napi_env env, napi_callback_info info) {
+static napi_value CheckExternal(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value arg;
   NAPI_CALL(env, napi_get_cb_info(env, info, &argc, &arg, NULL, NULL));
@@ -67,7 +69,7 @@ napi_value CheckExternal(napi_env env, napi_callback_info info) {
   return NULL;
 }
 
-napi_value CreateReference(napi_env env, napi_callback_info info) {
+static napi_value CreateReference(napi_env env, napi_callback_info info) {
   NAPI_ASSERT(env, test_reference == NULL,
       "The test allows only one reference at a time.");
 
@@ -88,7 +90,7 @@ napi_value CreateReference(napi_env env, napi_callback_info info) {
   return NULL;
 }
 
-napi_value DeleteReference(napi_env env, napi_callback_info info) {
+static napi_value DeleteReference(napi_env env, napi_callback_info info) {
   NAPI_ASSERT(env, test_reference != NULL,
       "A reference must have been created.");
 
@@ -97,7 +99,7 @@ napi_value DeleteReference(napi_env env, napi_callback_info info) {
   return NULL;
 }
 
-napi_value IncrementRefcount(napi_env env, napi_callback_info info) {
+static napi_value IncrementRefcount(napi_env env, napi_callback_info info) {
   NAPI_ASSERT(env, test_reference != NULL,
       "A reference must have been created.");
 
@@ -109,7 +111,7 @@ napi_value IncrementRefcount(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value DecrementRefcount(napi_env env, napi_callback_info info) {
+static napi_value DecrementRefcount(napi_env env, napi_callback_info info) {
   NAPI_ASSERT(env, test_reference != NULL,
       "A reference must have been created.");
 
@@ -121,7 +123,7 @@ napi_value DecrementRefcount(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value GetReferenceValue(napi_env env, napi_callback_info info) {
+static napi_value GetReferenceValue(napi_env env, napi_callback_info info) {
   NAPI_ASSERT(env, test_reference != NULL,
       "A reference must have been created.");
 
@@ -130,7 +132,40 @@ napi_value GetReferenceValue(napi_env env, napi_callback_info info) {
   return result;
 }
 
-napi_value Init(napi_env env, napi_value exports) {
+static void DeleteBeforeFinalizeFinalizer(
+    napi_env env, void* finalize_data, void* finalize_hint) {
+  napi_ref* ref = (napi_ref*)finalize_data;
+  napi_delete_reference(env, *ref);
+  free(ref);
+}
+
+static napi_value ValidateDeleteBeforeFinalize(napi_env env, napi_callback_info info) {
+  napi_value wrapObject;
+  size_t argc = 1;
+  NAPI_CALL(env, napi_get_cb_info(env, info, &argc, &wrapObject, NULL, NULL));
+
+  napi_ref* ref_t = malloc(sizeof(napi_ref));
+  NAPI_CALL(env, napi_wrap(env,
+			   wrapObject,
+			   ref_t,
+			   DeleteBeforeFinalizeFinalizer,
+			   NULL,
+			   NULL));
+
+  // Create a reference that will be eligible for collection at the same
+  // time as the wrapped object by passing in the same wrapObject.
+  // This means that the FinalizeOrderValidation callback may be run
+  // before the finalizer for the newly created reference (there is a finalizer
+  // behind the scenes even though it cannot be passed to napi_create_reference)
+  // The Finalizer for the wrap (which is different than the finalizer
+  // for the reference) calls napi_delete_reference validating that
+  // napi_delete_reference can be called before the finalizer for the
+  // reference runs.
+  NAPI_CALL(env, napi_create_reference(env, wrapObject, 0, ref_t));
+  return wrapObject;
+}
+
+static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor descriptors[] = {
     DECLARE_NAPI_GETTER("finalizeCount", GetFinalizeCount),
     DECLARE_NAPI_PROPERTY("createExternal", CreateExternal),
@@ -142,6 +177,8 @@ napi_value Init(napi_env env, napi_value exports) {
     DECLARE_NAPI_PROPERTY("incrementRefcount", IncrementRefcount),
     DECLARE_NAPI_PROPERTY("decrementRefcount", DecrementRefcount),
     DECLARE_NAPI_GETTER("referenceValue", GetReferenceValue),
+    DECLARE_NAPI_PROPERTY("validateDeleteBeforeFinalize",
+		          ValidateDeleteBeforeFinalize),
   };
 
   NAPI_CALL(env, napi_define_properties(

@@ -1,5 +1,5 @@
 'use strict';
-require('../common');
+const common = require('../common');
 const fixtures = require('../common/fixtures');
 
 // Check cert chain is received by client, and is completed with the ca cert
@@ -19,7 +19,7 @@ connect({
     cert: keys.agent6.cert,
     key: keys.agent6.key,
   },
-}, function(err, pair, cleanup) {
+}, common.mustCall((err, pair, cleanup) => {
   assert.ifError(err);
 
   const peer = pair.client.conn.getPeerCertificate();
@@ -27,7 +27,7 @@ connect({
   assert.strictEqual(peer.subject.emailAddress, 'adam.lippai@tresorit.com');
   assert.strictEqual(peer.subject.CN, 'Ádám Lippai'),
   assert.strictEqual(peer.issuer.CN, 'ca3');
-  assert.strictEqual(peer.serialNumber, 'E987DB4B683F4181');
+  assert.strictEqual(peer.serialNumber, 'D0082F458B6EFBE8');
 
   const next = pair.client.conn.getPeerCertificate(true).issuerCertificate;
   const root = next.issuerCertificate;
@@ -35,16 +35,16 @@ connect({
   debug('next:\n', next);
   assert.strictEqual(next.subject.CN, 'ca3');
   assert.strictEqual(next.issuer.CN, 'ca1');
-  assert.strictEqual(next.serialNumber, 'FAD50CC6A07F516D');
+  assert.strictEqual(next.serialNumber, 'ECC9B856270DA9A7');
 
   debug('root:\n', root);
   assert.strictEqual(root.subject.CN, 'ca1');
   assert.strictEqual(root.issuer.CN, 'ca1');
-  assert.strictEqual(root.serialNumber, 'EE586A7D0951D7B3');
+  assert.strictEqual(root.serialNumber, 'CB153AE212609FC6');
 
   // No client cert, so empty object returned.
   assert.deepStrictEqual(pair.server.conn.getPeerCertificate(), {});
   assert.deepStrictEqual(pair.server.conn.getPeerCertificate(true), {});
 
   return cleanup();
-});
+}));

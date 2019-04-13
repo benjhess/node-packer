@@ -3,6 +3,7 @@
 const {
   PerformanceEntry,
   mark: _mark,
+  clearMark: _clearMark,
   measure: _measure,
   milestones,
   observerCounts,
@@ -26,17 +27,10 @@ const {
   NODE_PERFORMANCE_MILESTONE_LOOP_START,
   NODE_PERFORMANCE_MILESTONE_LOOP_EXIT,
   NODE_PERFORMANCE_MILESTONE_BOOTSTRAP_COMPLETE,
-  NODE_PERFORMANCE_MILESTONE_ENVIRONMENT,
-  NODE_PERFORMANCE_MILESTONE_THIRD_PARTY_MAIN_START,
-  NODE_PERFORMANCE_MILESTONE_THIRD_PARTY_MAIN_END,
-  NODE_PERFORMANCE_MILESTONE_CLUSTER_SETUP_START,
-  NODE_PERFORMANCE_MILESTONE_CLUSTER_SETUP_END,
-  NODE_PERFORMANCE_MILESTONE_MODULE_LOAD_START,
-  NODE_PERFORMANCE_MILESTONE_MODULE_LOAD_END,
-  NODE_PERFORMANCE_MILESTONE_PRELOAD_MODULE_LOAD_START,
-  NODE_PERFORMANCE_MILESTONE_PRELOAD_MODULE_LOAD_END
+  NODE_PERFORMANCE_MILESTONE_ENVIRONMENT
 } = constants;
 
+const { AsyncResource } = require('async_hooks');
 const L = require('internal/linkedlist');
 const kInspect = require('internal/util').customInspectSymbol;
 const { inherits } = require('util');
@@ -49,17 +43,11 @@ const kBuffering = Symbol('buffering');
 const kQueued = Symbol('queued');
 const kTimerified = Symbol('timerified');
 const kInsertEntry = Symbol('insert-entry');
-const kIndexEntry = Symbol('index-entry');
-const kClearEntry = Symbol('clear-entry');
 const kGetEntries = Symbol('get-entries');
 const kIndex = Symbol('index');
 const kMarks = Symbol('marks');
 const kCount = Symbol('count');
-const kMaxCount = Symbol('max-count');
-const kDefaultMaxCount = 150;
 
-observerCounts[NODE_PERFORMANCE_ENTRY_TYPE_MARK] = 1;
-observerCounts[NODE_PERFORMANCE_ENTRY_TYPE_MEASURE] = 1;
 const observers = {};
 const observerableTypes = [
   'node',
@@ -137,7 +125,7 @@ function collectHttp2Stats(entry) {
 let errors;
 function lazyErrors() {
   if (errors === undefined)
-    errors = require('internal/errors');
+    errors = require('internal/errors').codes;
   return errors;
 }
 
@@ -154,8 +142,6 @@ function getMilestoneTimestamp(milestoneIdx) {
 }
 
 class PerformanceNodeTiming {
-  constructor() {}
-
   get name() {
     return 'node';
   }
@@ -194,43 +180,6 @@ class PerformanceNodeTiming {
 
   get bootstrapComplete() {
     return getMilestoneTimestamp(NODE_PERFORMANCE_MILESTONE_BOOTSTRAP_COMPLETE);
-  }
-
-  get thirdPartyMainStart() {
-    return getMilestoneTimestamp(
-      NODE_PERFORMANCE_MILESTONE_THIRD_PARTY_MAIN_START);
-  }
-
-  get thirdPartyMainEnd() {
-    return getMilestoneTimestamp(
-      NODE_PERFORMANCE_MILESTONE_THIRD_PARTY_MAIN_END);
-  }
-
-  get clusterSetupStart() {
-    return getMilestoneTimestamp(
-      NODE_PERFORMANCE_MILESTONE_CLUSTER_SETUP_START);
-  }
-
-  get clusterSetupEnd() {
-    return getMilestoneTimestamp(NODE_PERFORMANCE_MILESTONE_CLUSTER_SETUP_END);
-  }
-
-  get moduleLoadStart() {
-    return getMilestoneTimestamp(NODE_PERFORMANCE_MILESTONE_MODULE_LOAD_START);
-  }
-
-  get moduleLoadEnd() {
-    return getMilestoneTimestamp(NODE_PERFORMANCE_MILESTONE_MODULE_LOAD_END);
-  }
-
-  get preloadModuleLoadStart() {
-    return getMilestoneTimestamp(
-      NODE_PERFORMANCE_MILESTONE_PRELOAD_MODULE_LOAD_START);
-  }
-
-  get preloadModuleLoadEnd() {
-    return getMilestoneTimestamp(
-      NODE_PERFORMANCE_MILESTONE_PRELOAD_MODULE_LOAD_END);
   }
 
   [kInspect]() {
@@ -285,15 +234,10 @@ class PerformanceObserverEntryList {
     const item = { entry };
     L.append(this[kEntries], item);
     this[kCount]++;
-    this[kIndexEntry](item);
   }
 
   get length() {
     return this[kCount];
-  }
-
-  [kIndexEntry](entry) {
-    // Default implementation does nothing
   }
 
   [kGetEntries](name, type) {
@@ -330,12 +274,13 @@ class PerformanceObserverEntryList {
   }
 }
 
-class PerformanceObserver {
+class PerformanceObserver extends AsyncResource {
   constructor(callback) {
     if (typeof callback !== 'function') {
       const errors = lazyErrors();
-      throw new errors.TypeError('ERR_INVALID_CALLBACK');
+      throw new errors.ERR_INVALID_CALLBACK();
     }
+    super('PerformanceObserver');
     Object.defineProperties(this, {
       [kTypes]: {
         enumerable: false,
@@ -381,15 +326,14 @@ class PerformanceObserver {
   observe(options) {
     const errors = lazyErrors();
     if (typeof options !== 'object' || options == null) {
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'options', 'Object');
+      throw new errors.ERR_INVALID_ARG_TYPE('options', 'Object', options);
     }
     if (!Array.isArray(options.entryTypes)) {
-      throw new errors.TypeError('ERR_INVALID_OPT_VALUE',
-                                 'entryTypes', options);
+      throw new errors.ERR_INVALID_OPT_VALUE('entryTypes', options);
     }
     const entryTypes = options.entryTypes.filter(filterTypes).map(mapTypes);
     if (entryTypes.length === 0) {
-      throw new errors.Error('ERR_VALID_PERFORMANCE_ENTRY_TYPE');
+      throw new errors.ERR_VALID_PERFORMANCE_ENTRY_TYPE();
     }
     this.disconnect();
     this[kBuffer][kEntries] = [];
@@ -406,72 +350,11 @@ class PerformanceObserver {
   }
 }
 
-class Performance extends PerformanceObserverEntryList {
+class Performance {
   constructor() {
-    super();
     this[kIndex] = {
       [kMarks]: new Set()
     };
-    this[kMaxCount] = kDefaultMaxCount;
-    this[kInsertEntry](nodeTiming);
-  }
-
-  set maxEntries(val) {
-    if (typeof val !== 'number' || val >>> 0 !== val) {
-      const errors = lazyErrors();
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'val', 'number');
-    }
-    this[kMaxCount] = Math.max(1, val >>> 0);
-  }
-
-  get maxEntries() {
-    return this[kMaxCount];
-  }
-
-  [kIndexEntry](item) {
-    const index = this[kIndex];
-    const type = item.entry.entryType;
-    let items = index[type];
-    if (!items) {
-      items = index[type] = {};
-      L.init(items);
-    }
-    const entry = item.entry;
-    L.append(items, { entry, item });
-    const count = this[kCount];
-    if (count > this[kMaxCount]) {
-      const text = count === 1 ? 'is 1 entry' : `are ${count} entries`;
-      process.emitWarning('Possible perf_hooks memory leak detected. ' +
-                          `There ${text} in the ` +
-                          'Performance Timeline. Use the clear methods ' +
-                          'to remove entries that are no longer needed or ' +
-                          'set performance.maxEntries equal to a higher ' +
-                          'value (currently the maxEntries is ' +
-                          `${this[kMaxCount]}).`);
-    }
-  }
-
-  [kClearEntry](type, name) {
-    const index = this[kIndex];
-    const items = index[type];
-    if (!items) return;
-    let item = L.peek(items);
-    while (item && item !== items) {
-      const entry = item.entry;
-      const next = item._idlePrev;
-      if (name !== undefined) {
-        if (entry.name === `${name}`) {
-          L.remove(item); // remove from the index
-          L.remove(item.item); // remove from the master
-          this[kCount]--;
-        }
-      } else {
-        L.remove(item); // remove from the index
-        L.remove(item.item); // remove from the master
-        this[kCount]--;
-      }
-      item = next;
-    }
   }
 
   get nodeTiming() {
@@ -499,40 +382,26 @@ class Performance extends PerformanceObserverEntryList {
     const marks = this[kIndex][kMarks];
     if (!marks.has(endMark) && !(endMark in nodeTiming)) {
       const errors = lazyErrors();
-      throw new errors.Error('ERR_INVALID_PERFORMANCE_MARK', endMark);
+      throw new errors.ERR_INVALID_PERFORMANCE_MARK(endMark);
     }
     _measure(name, startMark, endMark);
   }
 
   clearMarks(name) {
     name = name !== undefined ? `${name}` : name;
-    this[kClearEntry]('mark', name);
-    if (name !== undefined)
+    if (name !== undefined) {
       this[kIndex][kMarks].delete(name);
-    else
+      _clearMark(name);
+    } else {
       this[kIndex][kMarks].clear();
-  }
-
-  clearMeasures(name) {
-    this[kClearEntry]('measure', name);
-  }
-
-  clearGC() {
-    this[kClearEntry]('gc');
-  }
-
-  clearFunctions(name) {
-    this[kClearEntry]('function', name);
-  }
-
-  clearEntries(name) {
-    this[kClearEntry](name);
+      _clearMark();
+    }
   }
 
   timerify(fn) {
     if (typeof fn !== 'function') {
       const errors = lazyErrors();
-      throw new errors.TypeError('ERR_INVALID_ARG_TYPE', 'fn', 'Function');
+      throw new errors.ERR_INVALID_ARG_TYPE('fn', 'Function', fn);
     }
     if (fn[kTimerified])
       return fn[kTimerified];
@@ -562,7 +431,6 @@ class Performance extends PerformanceObserverEntryList {
 
   [kInspect]() {
     return {
-      maxEntries: this.maxEntries,
       nodeTiming: this.nodeTiming,
       timeOrigin: this.timeOrigin
     };
@@ -582,7 +450,7 @@ function getObserversList(type) {
 
 function doNotify() {
   this[kQueued] = false;
-  this[kCallback](this[kBuffer], this);
+  this.runInAsyncScope(this[kCallback], this, this[kBuffer], this);
   this[kBuffer][kEntries] = [];
   L.init(this[kBuffer][kEntries]);
 }
@@ -594,7 +462,6 @@ function observersCallback(entry) {
   if (type === NODE_PERFORMANCE_ENTRY_TYPE_HTTP2)
     collectHttp2Stats(entry);
 
-  performance[kInsertEntry](entry);
   const list = getObserversList(type);
 
   let current = L.peek(list);

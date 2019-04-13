@@ -1,8 +1,8 @@
+// Flags: --expose-internals
 'use strict';
 const common = require('../common');
 common.skipIfInspectorDisabled();
 common.skipIf32Bits();
-common.crashOnUnhandledRejection();
 const { NodeInstance } = require('../common/inspector-helper');
 const assert = require('assert');
 
@@ -45,7 +45,7 @@ async function runTests() {
                    'break2', 'runTest:8');
 
   await session.runToCompletion();
-  assert.strictEqual(0, (await instance.expectShutdown()).exitCode);
+  assert.strictEqual((await instance.expectShutdown()).exitCode, 0);
 }
 
 function debuggerPausedAt(msg, functionName, previousTickLocation) {
@@ -54,7 +54,7 @@ function debuggerPausedAt(msg, functionName, previousTickLocation) {
     `${Object.keys(msg.params)} contains "asyncStackTrace" property`);
 
   assert.strictEqual(msg.params.callFrames[0].functionName, functionName);
-  assert.strictEqual(msg.params.asyncStackTrace.description, 'Promise.resolve');
+  assert.strictEqual(msg.params.asyncStackTrace.description, 'Promise.then');
 
   const frameLocations = msg.params.asyncStackTrace.callFrames.map(
     (frame) => `${frame.functionName}:${frame.lineNumber}`);

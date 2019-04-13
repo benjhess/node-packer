@@ -21,19 +21,20 @@
 
 'use strict';
 const common = require('../common');
+const tmpdir = require('../common/tmpdir');
+
 const assert = require('assert');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 
 const backslash = /\\/g;
 
 console.error('load test-module-loading.js');
 
-// assert that this is the main module.
-assert.strictEqual(require.main.id, '.', 'main module should have id of \'.\'');
-assert.strictEqual(require.main, module, 'require.main should === module');
-assert.strictEqual(process.mainModule, module,
-                   'process.mainModule should === module');
+assert.strictEqual(require.main.id, '.');
+assert.strictEqual(require.main, module);
+assert.strictEqual(process.mainModule, module);
+
 // assert that it's *not* the main module in the required module.
 require('../fixtures/not-main-module.js');
 
@@ -100,20 +101,15 @@ const d2 = require('../fixtures/b/d');
   assert.notStrictEqual(threeFolder, three);
 }
 
-console.error('test package.json require() loading');
-assert.throws(
-  function() {
-    require('../fixtures/packages/invalid');
-  },
-  /^SyntaxError: Error parsing .+: Unexpected token , in JSON at position 1$/
-);
+assert.strictEqual(require('../fixtures/packages/index').ok, 'ok');
+assert.strictEqual(require('../fixtures/packages/main').ok, 'ok');
+assert.strictEqual(require('../fixtures/packages/main-index').ok, 'ok');
+assert.strictEqual(require('../fixtures/packages/missing-main').ok, 'ok');
 
-assert.strictEqual(require('../fixtures/packages/index').ok, 'ok',
-                   'Failed loading package');
-assert.strictEqual(require('../fixtures/packages/main').ok, 'ok',
-                   'Failed loading package');
-assert.strictEqual(require('../fixtures/packages/main-index').ok, 'ok',
-                   'Failed loading package with index.js in main subdir');
+assert.throws(
+  function() { require('../fixtures/packages/unparseable'); },
+  /^SyntaxError: Error parsing/
+);
 
 {
   console.error('test cycles containing a .. path');
@@ -171,14 +167,14 @@ require.extensions['.test'] = function(module) {
 
 assert.strictEqual(require('../fixtures/registerExt2').custom, 'passed');
 
-assert.strictEqual(require('../fixtures/foo').foo, 'ok',
-                   'require module with no extension');
+assert.strictEqual(require('../fixtures/foo').foo, 'ok');
 
 // Should not attempt to load a directory
 try {
-  require('../fixtures/empty');
+  tmpdir.refresh();
+  require(tmpdir.path);
 } catch (err) {
-  assert.strictEqual(err.message, 'Cannot find module \'../fixtures/empty\'');
+  assert.strictEqual(err.message, `Cannot find module '${tmpdir.path}'`);
 }
 
 {
@@ -186,13 +182,12 @@ try {
   console.error('load order');
 
   const loadOrder = '../fixtures/module-load-order/';
-  const msg = 'Load order incorrect.';
 
   require.extensions['.reg'] = require.extensions['.js'];
   require.extensions['.reg2'] = require.extensions['.js'];
 
-  assert.strictEqual(require(`${loadOrder}file1`).file1, 'file1', msg);
-  assert.strictEqual(require(`${loadOrder}file2`).file2, 'file2.js', msg);
+  assert.strictEqual(require(`${loadOrder}file1`).file1, 'file1');
+  assert.strictEqual(require(`${loadOrder}file2`).file2, 'file2.js');
   try {
     require(`${loadOrder}file3`);
   } catch (e) {
@@ -202,9 +197,10 @@ try {
     else
       assert.ok(/file3\.node/.test(e.message.replace(backslash, '/')));
   }
-  assert.strictEqual(require(`${loadOrder}file4`).file4, 'file4.reg', msg);
-  assert.strictEqual(require(`${loadOrder}file5`).file5, 'file5.reg2', msg);
-  assert.strictEqual(require(`${loadOrder}file6`).file6, 'file6/index.js', msg);
+
+  assert.strictEqual(require(`${loadOrder}file4`).file4, 'file4.reg');
+  assert.strictEqual(require(`${loadOrder}file5`).file5, 'file5.reg2');
+  assert.strictEqual(require(`${loadOrder}file6`).file6, 'file6/index.js');
   try {
     require(`${loadOrder}file7`);
   } catch (e) {
@@ -213,10 +209,9 @@ try {
     else
       assert.ok(/file7\/index\.node/.test(e.message.replace(backslash, '/')));
   }
-  assert.strictEqual(require(`${loadOrder}file8`).file8, 'file8/index.reg',
-                     msg);
-  assert.strictEqual(require(`${loadOrder}file9`).file9, 'file9/index.reg2',
-                     msg);
+
+  assert.strictEqual(require(`${loadOrder}file8`).file8, 'file8/index.reg');
+  assert.strictEqual(require(`${loadOrder}file9`).file9, 'file9/index.reg2');
 }
 
 {
@@ -256,7 +251,6 @@ try {
 
   assert.deepStrictEqual(children, {
     'common/index.js': {
-      'common/fixtures.js': {},
       'common/tmpdir.js': {}
     },
     'fixtures/not-main-module.js': {},
@@ -278,6 +272,7 @@ try {
     'fixtures/packages/index/index.js': {},
     'fixtures/packages/main/package-main-module.js': {},
     'fixtures/packages/main-index/package-main-module/index.js': {},
+    'fixtures/packages/missing-main/index.js': {},
     'fixtures/cycles/root.js': {
       'fixtures/cycles/folder/foo.js': {}
     },
@@ -292,7 +287,6 @@ try {
     'fixtures/registerExt.test': {},
     'fixtures/registerExt.hello.world': {},
     'fixtures/registerExt2.test': {},
-    'fixtures/empty.js': {},
     'fixtures/module-load-order/file1': {},
     'fixtures/module-load-order/file2.js': {},
     'fixtures/module-load-order/file3.node': {},
@@ -311,17 +305,6 @@ try {
   });
 }
 
-
-// require() must take string, and must be truthy
-assert.throws(function() {
-  console.error('require non-string');
-  require({ foo: 'bar' });
-}, /path must be a string/);
-
-assert.throws(function() {
-  console.error('require empty string');
-  require('');
-}, /missing path/);
 
 process.on('exit', function() {
   assert.ok(a.A instanceof Function);

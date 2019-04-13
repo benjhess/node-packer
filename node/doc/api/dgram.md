@@ -1,4 +1,4 @@
-# UDP / Datagram Sockets
+# UDP/Datagram Sockets
 
 <!--introduced_in=v0.10.0-->
 
@@ -57,7 +57,7 @@ added: v0.1.99
 * `exception` {Error}
 
 The `'error'` event is emitted whenever any error occurs. The event handler
-function is passed a single Error object.
+function is passed a single `Error` object.
 
 ### Event: 'listening'
 <!-- YAML
@@ -95,10 +95,30 @@ Tells the kernel to join a multicast group at the given `multicastAddress` and
 one interface and will add membership to it. To add membership to every
 available interface, call `addMembership` multiple times, once per interface.
 
+When sharing a UDP socket across multiple `cluster` workers, the
+`socket.addMembership()` function must be called only once or an
+`EADDRINUSE` error will occur:
+
+```js
+const cluster = require('cluster');
+const dgram = require('dgram');
+if (cluster.isMaster) {
+  cluster.fork(); // Works ok.
+  cluster.fork(); // Fails with EADDRINUSE.
+} else {
+  const s = dgram.createSocket('udp4');
+  s.bind(1234, () => {
+    s.addMembership('224.0.0.114');
+  });
+}
+```
+
 ### socket.address()
 <!-- YAML
 added: v0.1.99
 -->
+
+* Returns: {Object}
 
 Returns an object containing the address information for a socket.
 For UDP sockets, this object will contain `address`, `family` and `port`
@@ -109,7 +129,7 @@ properties.
 added: v0.1.99
 -->
 
-* `port` {number} Integer.
+* `port` {integer}
 * `address` {string}
 * `callback` {Function} with no parameters. Called when binding is complete.
 
@@ -206,6 +226,7 @@ socket.bind({
 <!-- YAML
 added: v0.1.99
 -->
+* `callback` {Function} Called when the socket has been closed.
 
 Close the underlying socket and stop listening for data on it. If a callback is
 provided, it is added as a listener for the [`'close'`][] event.
@@ -256,13 +277,13 @@ Calling `socket.ref()` multiples times will have no additional effect.
 The `socket.ref()` method returns a reference to the socket so calls can be
 chained.
 
-### socket.send(msg, [offset, length,] port [, address] [, callback])
+### socket.send(msg[, offset, length], port[, address][, callback])
 <!-- YAML
 added: v0.1.99
 changes:
   - version: v8.0.0
     pr-url: https://github.com/nodejs/node/pull/11985
-    description: The `msg` parameter can be an Uint8Array now.
+    description: The `msg` parameter can be an `Uint8Array` now.
   - version: v8.0.0
     pr-url: https://github.com/nodejs/node/pull/10473
     description: The `address` parameter is always optional now.
@@ -277,9 +298,9 @@ changes:
 -->
 
 * `msg` {Buffer|Uint8Array|string|Array} Message to be sent.
-* `offset` {number} Integer. Offset in the buffer where the message starts.
-* `length` {number} Integer. Number of bytes in the message.
-* `port` {number} Integer. Destination port.
+* `offset` {integer} Offset in the buffer where the message starts.
+* `length` {integer} Number of bytes in the message.
+* `port` {integer} Destination port.
 * `address` {string} Destination hostname or IP address.
 * `callback` {Function} Called when the message has been sent.
 
@@ -319,7 +340,7 @@ the error is emitted as an `'error'` event on the `socket` object.
 Offset and length are optional but both *must* be set if either are used.
 They are supported only when the first argument is a `Buffer` or `Uint8Array`.
 
-Example of sending a UDP packet to a random port on `localhost`;
+Example of sending a UDP packet to a port on `localhost`;
 
 ```js
 const dgram = require('dgram');
@@ -330,8 +351,8 @@ client.send(message, 41234, 'localhost', (err) => {
 });
 ```
 
-Example of sending a UDP packet composed of multiple buffers to a random port
-on `127.0.0.1`;
+Example of sending a UDP packet composed of multiple buffers to a port on
+`127.0.0.1`;
 
 ```js
 const dgram = require('dgram');
@@ -392,10 +413,10 @@ added: v8.6.0
 
 * `multicastInterface` {string}
 
-*Note: All references to scope in this section are referring to
+*All references to scope in this section are referring to
 [IPv6 Zone Indices][], which are defined by [RFC 4007][]. In string form, an IP
-with a scope index is written as `'IP%scope'` where scope is an interface name or
-interface number.*
+with a scope index is written as `'IP%scope'` where scope is an interface name
+or interface number.*
 
 Sets the default outgoing multicast interface of the socket to a chosen
 interface or back to system interface selection. The `multicastInterface` must
@@ -462,7 +483,6 @@ A socket's address family's ANY address (IPv4 `'0.0.0.0'` or IPv6 `'::'`) can be
 used to return control of the sockets default outgoing interface to the system
 for future multicast packets.
 
-
 ### socket.setMulticastLoopback(flag)
 <!-- YAML
 added: v0.3.8
@@ -478,7 +498,7 @@ multicast packets will also be received on the local interface.
 added: v0.3.8
 -->
 
-* `ttl` {number} Integer.
+* `ttl` {integer}
 
 Sets the `IP_MULTICAST_TTL` socket option. While TTL generally stands for
 "Time to Live", in this context it specifies the number of IP hops that a
@@ -494,7 +514,7 @@ between 0 and 255. The default on most systems is `1` but can vary.
 added: v8.7.0
 -->
 
-* `size` {number} Integer
+* `size` {integer}
 
 Sets the `SO_RCVBUF` socket option. Sets the maximum socket receive buffer
 in bytes.
@@ -504,7 +524,7 @@ in bytes.
 added: v8.7.0
 -->
 
-* `size` {number} Integer
+* `size` {integer}
 
 Sets the `SO_SNDBUF` socket option. Sets the maximum socket send buffer
 in bytes.
@@ -514,7 +534,7 @@ in bytes.
 added: v0.1.101
 -->
 
-* `ttl` {number} Integer.
+* `ttl` {integer}
 
 Sets the `IP_TTL` socket option. While TTL generally stands for "Time to Live",
 in this context it specifies the number of IP hops that a packet is allowed to
@@ -544,8 +564,7 @@ chained.
 ### Change to asynchronous `socket.bind()` behavior
 
 As of Node.js v0.10, [`dgram.Socket#bind()`][] changed to an asynchronous
-execution model. Legacy code that assumes synchronous behavior, as in the
-following example:
+execution model. Legacy code would use synchronous behavior:
 
 ```js
 const s = dgram.createSocket('udp4');
@@ -553,8 +572,8 @@ s.bind(1234);
 s.addMembership('224.0.0.114');
 ```
 
-Must be changed to pass a callback function to the [`dgram.Socket#bind()`][]
-function:
+Such legacy code would need to be changed to pass a callback function to the
+[`dgram.Socket#bind()`][] function:
 
 ```js
 const s = dgram.createSocket('udp4');
@@ -603,13 +622,13 @@ and port can be retrieved using [`socket.address().address`][] and
 added: v0.1.99
 -->
 
-* `type` {string} - Either 'udp4' or 'udp6'.
+* `type` {string} - Either `'udp4'` or `'udp6'`.
 * `callback` {Function} - Attached as a listener to `'message'` events.
 * Returns: {dgram.Socket}
 
 Creates a `dgram.Socket` object of the specified `type`. The `type` argument
-can be either `udp4` or `udp6`. An optional `callback` function can be passed
-which is added as a listener for `'message'` events.
+can be either `'udp4'` or `'udp6'`. An optional `callback` function can be
+passed which is added as a listener for `'message'` events.
 
 Once the socket is created, calling [`socket.bind()`][] will instruct the
 socket to begin listening for datagram messages. When `address` and `port` are
@@ -621,6 +640,7 @@ and `udp6` sockets). The bound address and port can be retrieved using
 [`'close'`]: #dgram_event_close
 [`Error`]: errors.html#errors_class_error
 [`EventEmitter`]: events.html
+[`System Error`]: errors.html#errors_class_systemerror
 [`close()`]: #dgram_socket_close_callback
 [`cluster`]: cluster.html
 [`dgram.Socket#bind()`]: #dgram_socket_bind_options_callback
@@ -629,7 +649,6 @@ and `udp6` sockets). The bound address and port can be retrieved using
 [`socket.address().address`]: #dgram_socket_address
 [`socket.address().port`]: #dgram_socket_address
 [`socket.bind()`]: #dgram_socket_bind_port_address_callback
-[`System Error`]: errors.html#errors_class_systemerror
-[byte length]: buffer.html#buffer_class_method_buffer_bytelength_string_encoding
 [IPv6 Zone Indices]: https://en.wikipedia.org/wiki/IPv6_address#Scoped_literal_IPv6_addresses
 [RFC 4007]: https://tools.ietf.org/html/rfc4007
+[byte length]: buffer.html#buffer_class_method_buffer_bytelength_string_encoding

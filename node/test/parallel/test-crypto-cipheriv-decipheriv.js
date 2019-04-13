@@ -78,6 +78,80 @@ function testCipher3(key, iv) {
          `encryption/decryption with key ${key} and iv ${iv}`);
 }
 
+{
+  const Cipheriv = crypto.Cipheriv;
+  const key = '123456789012345678901234';
+  const iv = '12345678';
+
+  const instance = Cipheriv('des-ede3-cbc', key, iv);
+  assert(instance instanceof Cipheriv, 'Cipheriv is expected to return a new ' +
+                                       'instance when called without `new`');
+
+  common.expectsError(
+    () => crypto.createCipheriv(null),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "cipher" argument must be of type string. ' +
+               'Received type object'
+    });
+
+  common.expectsError(
+    () => crypto.createCipheriv('des-ede3-cbc', null),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "key" argument must be one of type string, Buffer, ' +
+               'TypedArray, or DataView. Received type object'
+    });
+
+  common.expectsError(
+    () => crypto.createCipheriv('des-ede3-cbc', key, 10),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "iv" argument must be one of type string, Buffer, ' +
+               'TypedArray, or DataView. Received type number'
+    });
+}
+
+{
+  const Decipheriv = crypto.Decipheriv;
+  const key = '123456789012345678901234';
+  const iv = '12345678';
+
+  const instance = Decipheriv('des-ede3-cbc', key, iv);
+  assert(instance instanceof Decipheriv, 'Decipheriv expected to return a new' +
+                                         ' instance when called without `new`');
+
+  common.expectsError(
+    () => crypto.createDecipheriv(null),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "cipher" argument must be of type string. ' +
+               'Received type object'
+    });
+
+  common.expectsError(
+    () => crypto.createDecipheriv('des-ede3-cbc', null),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "key" argument must be one of type string, Buffer, ' +
+               'TypedArray, or DataView. Received type object'
+    });
+
+  common.expectsError(
+    () => crypto.createDecipheriv('des-ede3-cbc', key, 10),
+    {
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "iv" argument must be one of type string, Buffer, ' +
+               'TypedArray, or DataView. Received type number'
+    });
+}
+
 testCipher1('0123456789abcd0123456789', '12345678');
 testCipher1('0123456789abcd0123456789', Buffer.from('12345678'));
 testCipher1(Buffer.from('0123456789abcd0123456789'), '12345678');

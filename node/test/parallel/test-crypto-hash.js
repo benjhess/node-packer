@@ -100,9 +100,9 @@ fileStream.on('data', function(data) {
   sha1Hash.update(data);
 });
 fileStream.on('close', common.mustCall(function() {
+  // Test SHA1 of sample.png
   assert.strictEqual(sha1Hash.digest('hex'),
-                     '22723e553129a336ad96e10f6aecdf0f45e4149e',
-                     'Test SHA1 of sample.png');
+                     '22723e553129a336ad96e10f6aecdf0f45e4149e');
 }));
 
 // Issue https://github.com/nodejs/node-v0.x-archive/issues/2227: unknown digest
@@ -110,6 +110,17 @@ fileStream.on('close', common.mustCall(function() {
 assert.throws(function() {
   crypto.createHash('xyzzy');
 }, /Digest method not supported/);
+
+// Issue https://github.com/nodejs/node/issues/9819: throwing encoding used to
+// segfault.
+common.expectsError(
+  () => crypto.createHash('sha256').digest({
+    toString: () => { throw new Error('boom'); },
+  }),
+  {
+    type: Error,
+    message: 'boom'
+  });
 
 // Default UTF-8 encoding
 const hutf8 = crypto.createHash('sha512').update('УТФ-8 text').digest('hex');
@@ -124,14 +135,42 @@ assert.notStrictEqual(
 
 const h3 = crypto.createHash('sha256');
 h3.digest();
-assert.throws(function() {
-  h3.digest();
-}, /Digest already called/);
 
-assert.throws(function() {
-  h3.update('foo');
-}, /Digest already called/);
+common.expectsError(
+  () => h3.digest(),
+  {
+    code: 'ERR_CRYPTO_HASH_FINALIZED',
+    type: Error
+  });
 
-assert.throws(function() {
-  crypto.createHash('sha256').digest('ucs2');
-}, /^Error: hash\.digest\(\) does not support UTF-16$/);
+common.expectsError(
+  () => h3.update('foo'),
+  {
+    code: 'ERR_CRYPTO_HASH_FINALIZED',
+    type: Error
+  });
+
+common.expectsError(
+  () => crypto.createHash('sha256').digest('ucs2'),
+  {
+    code: 'ERR_CRYPTO_HASH_DIGEST_NO_UTF16',
+    type: Error
+  }
+);
+
+common.expectsError(
+  () => crypto.createHash(),
+  {
+    code: 'ERR_INVALID_ARG_TYPE',
+    type: TypeError,
+    message: 'The "algorithm" argument must be of type string. ' +
+             'Received type undefined'
+  }
+);
+
+{
+  const Hash = crypto.Hash;
+  const instance = crypto.Hash('sha256');
+  assert(instance instanceof Hash, 'Hash is expected to return a new instance' +
+                                   ' when called without `new`');
+}

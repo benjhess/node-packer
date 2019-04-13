@@ -8,7 +8,10 @@ const assert = require('assert');
 const tick = require('./tick');
 const initHooks = require('./init-hooks');
 const { checkInvocations } = require('./hook-checks');
-const spawn = require('child_process').spawn;
+const { spawn } = require('child_process');
+
+if (!common.isMainThread)
+  common.skip('Worker bootstrapping works differently -> different async IDs');
 
 const hooks = initHooks();
 
@@ -42,7 +45,7 @@ checkInvocations(processwrap, { init: 1 },
   checkInvocations(x, { init: 1 }, 'pipe wrap when sleep.spawn was called');
 });
 
-function onsleepExit(code) {
+function onsleepExit() {
   checkInvocations(processwrap, { init: 1, before: 1 },
                    'processwrap while in onsleepExit callback');
 }

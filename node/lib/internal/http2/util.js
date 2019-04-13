@@ -1,7 +1,13 @@
 'use strict';
 
-const binding = process.binding('http2');
-const errors = require('internal/errors');
+const binding = internalBinding('http2');
+const {
+  ERR_HTTP2_HEADER_SINGLE_VALUE,
+  ERR_HTTP2_INVALID_CONNECTION_HEADERS,
+  ERR_HTTP2_INVALID_PSEUDOHEADER,
+  ERR_HTTP2_INVALID_SETTING_VALUE,
+  ERR_INVALID_ARG_TYPE
+} = require('internal/errors').codes;
 
 const kSocket = Symbol('socket');
 
@@ -14,6 +20,7 @@ const {
   HTTP2_HEADER_AUTHORITY,
   HTTP2_HEADER_SCHEME,
   HTTP2_HEADER_PATH,
+  HTTP2_HEADER_PROTOCOL,
   HTTP2_HEADER_ACCESS_CONTROL_ALLOW_CREDENTIALS,
   HTTP2_HEADER_ACCESS_CONTROL_MAX_AGE,
   HTTP2_HEADER_ACCESS_CONTROL_REQUEST_METHOD,
@@ -72,7 +79,8 @@ const kValidPseudoHeaders = new Set([
   HTTP2_HEADER_METHOD,
   HTTP2_HEADER_AUTHORITY,
   HTTP2_HEADER_SCHEME,
-  HTTP2_HEADER_PATH
+  HTTP2_HEADER_PATH,
+  HTTP2_HEADER_PROTOCOL
 ]);
 
 // This set contains headers that are permitted to have only a single
@@ -83,6 +91,7 @@ const kSingleValueHeaders = new Set([
   HTTP2_HEADER_AUTHORITY,
   HTTP2_HEADER_SCHEME,
   HTTP2_HEADER_PATH,
+  HTTP2_HEADER_PROTOCOL,
   HTTP2_HEADER_ACCESS_CONTROL_ALLOW_CREDENTIALS,
   HTTP2_HEADER_ACCESS_CONTROL_MAX_AGE,
   HTTP2_HEADER_ACCESS_CONTROL_REQUEST_METHOD,
@@ -149,7 +158,8 @@ const IDX_SETTINGS_INITIAL_WINDOW_SIZE = 2;
 const IDX_SETTINGS_MAX_FRAME_SIZE = 3;
 const IDX_SETTINGS_MAX_CONCURRENT_STREAMS = 4;
 const IDX_SETTINGS_MAX_HEADER_LIST_SIZE = 5;
-const IDX_SETTINGS_FLAGS = 6;
+const IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL = 6;
+const IDX_SETTINGS_FLAGS = 7;
 
 const IDX_SESSION_STATE_EFFECTIVE_LOCAL_WINDOW_SIZE = 0;
 const IDX_SESSION_STATE_EFFECTIVE_RECV_DATA_LENGTH = 1;
@@ -271,6 +281,12 @@ function getDefaultSettings() {
       settingsBuffer[IDX_SETTINGS_MAX_HEADER_LIST_SIZE];
   }
 
+  if ((flags & (1 << IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL)) ===
+      (1 << IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL)) {
+    holder.enableConnectProtocol =
+      settingsBuffer[IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL];
+  }
+
   return holder;
 }
 
@@ -288,7 +304,8 @@ function getSettings(session, remote) {
     initialWindowSize: settingsBuffer[IDX_SETTINGS_INITIAL_WINDOW_SIZE],
     maxFrameSize: settingsBuffer[IDX_SETTINGS_MAX_FRAME_SIZE],
     maxConcurrentStreams: settingsBuffer[IDX_SETTINGS_MAX_CONCURRENT_STREAMS],
-    maxHeaderListSize: settingsBuffer[IDX_SETTINGS_MAX_HEADER_LIST_SIZE]
+    maxHeaderListSize: settingsBuffer[IDX_SETTINGS_MAX_HEADER_LIST_SIZE],
+    enableConnectProtocol: settingsBuffer[IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL]
   };
 }
 
@@ -322,6 +339,11 @@ function updateSettingsBuffer(settings) {
   if (typeof settings.enablePush === 'boolean') {
     flags |= (1 << IDX_SETTINGS_ENABLE_PUSH);
     settingsBuffer[IDX_SETTINGS_ENABLE_PUSH] = Number(settings.enablePush);
+  }
+  if (typeof settings.enableConnectProtocol === 'boolean') {
+    flags |= (1 << IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL);
+    settingsBuffer[IDX_SETTINGS_ENABLE_CONNECT_PROTOCOL] =
+      Number(settings.enableConnectProtocol);
   }
 
   settingsBuffer[IDX_SETTINGS_FLAGS] = flags;
@@ -382,7 +404,7 @@ function isIllegalConnectionSpecificHeader(name, value) {
 
 function assertValidPseudoHeader(key) {
   if (!kValidPseudoHeaders.has(key)) {
-    const err = new errors.Error('ERR_HTTP2_INVALID_PSEUDOHEADER', key);
+    const err = new ERR_HTTP2_INVALID_PSEUDOHEADER(key);
     Error.captureStackTrace(err, assertValidPseudoHeader);
     return err;
   }
@@ -390,14 +412,14 @@ function assertValidPseudoHeader(key) {
 
 function assertValidPseudoHeaderResponse(key) {
   if (key !== ':status') {
-    const err = new errors.Error('ERR_HTTP2_INVALID_PSEUDOHEADER', key);
+    const err = new ERR_HTTP2_INVALID_PSEUDOHEADER(key);
     Error.captureStackTrace(err, assertValidPseudoHeaderResponse);
     return err;
   }
 }
 
 function assertValidPseudoHeaderTrailer(key) {
-  const err = new errors.Error('ERR_HTTP2_INVALID_PSEUDOHEADER', key);
+  const err = new ERR_HTTP2_INVALID_PSEUDOHEADER(key);
   Error.captureStackTrace(err, assertValidPseudoHeaderTrailer);
   return err;
 }
@@ -426,14 +448,14 @@ function mapToHeaders(map,
           break;
         default:
           if (isSingleValueHeader)
-            return new errors.Error('ERR_HTTP2_HEADER_SINGLE_VALUE', key);
+            return new ERR_HTTP2_HEADER_SINGLE_VALUE(key);
       }
     } else {
       value = String(value);
     }
     if (isSingleValueHeader) {
       if (singles.has(key))
-        return new errors.Error('ERR_HTTP2_HEADER_SINGLE_VALUE', key);
+        return new ERR_HTTP2_HEADER_SINGLE_VALUE(key);
       singles.add(key);
     }
     if (key[0] === ':') {
@@ -444,7 +466,7 @@ function mapToHeaders(map,
       count++;
     } else {
       if (isIllegalConnectionSpecificHeader(key, value)) {
-        return new errors.Error('ERR_HTTP2_INVALID_CONNECTION_HEADERS', key);
+        return new ERR_HTTP2_INVALID_CONNECTION_HEADERS(key);
       }
       if (isArray) {
         for (var k = 0; k < value.length; k++) {
@@ -471,12 +493,12 @@ class NghttpError extends Error {
   }
 }
 
-function assertIsObject(value, name, types = 'object') {
+function assertIsObject(value, name, types = 'Object') {
   if (value !== undefined &&
       (value === null ||
        typeof value !== 'object' ||
        Array.isArray(value))) {
-    const err = new errors.TypeError('ERR_INVALID_ARG_TYPE', name, types);
+    const err = new ERR_INVALID_ARG_TYPE(name, types, value);
     Error.captureStackTrace(err, assertIsObject);
     throw err;
   }
@@ -485,8 +507,7 @@ function assertIsObject(value, name, types = 'object') {
 function assertWithinRange(name, value, min = 0, max = Infinity) {
   if (value !== undefined &&
       (typeof value !== 'number' || value < min || value > max)) {
-    const err = new errors.RangeError('ERR_HTTP2_INVALID_SETTING_VALUE',
-                                      name, value);
+    const err = new ERR_HTTP2_INVALID_SETTING_VALUE.RangeError(name, value);
     err.min = min;
     err.max = max;
     err.actual = value;
@@ -504,7 +525,7 @@ function toHeaderObject(headers) {
       value |= 0;
     var existing = obj[name];
     if (existing === undefined) {
-      obj[name] = value;
+      obj[name] = name === HTTP2_HEADER_SET_COOKIE ? [value] : value;
     } else if (!kSingleValueHeaders.has(name)) {
       switch (name) {
         case HTTP2_HEADER_COOKIE:
@@ -523,10 +544,7 @@ function toHeaderObject(headers) {
           // fields with the same name.  Since it cannot be combined into a
           // single field-value, recipients ought to handle "Set-Cookie" as a
           // special case while processing header fields."
-          if (Array.isArray(existing))
-            existing.push(value);
-          else
-            obj[name] = [existing, value];
+          existing.push(value);
           break;
         default:
           // https://tools.ietf.org/html/rfc7230#section-3.2.2

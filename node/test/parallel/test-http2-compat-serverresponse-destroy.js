@@ -3,13 +3,11 @@
 const common = require('../common');
 if (!common.hasCrypto)
   common.skip('missing crypto');
-const assert = require('assert');
 const http2 = require('http2');
 const Countdown = require('../common/countdown');
 
 // Check that destroying the Http2ServerResponse stream produces
-// the expected result, including the ability to throw an error
-// which is emitted on server.streamError
+// the expected result.
 
 const errors = [
   'test-error',
@@ -22,9 +20,9 @@ const server = http2.createServer(common.mustCall((req, res) => {
   res.on('error', common.mustNotCall());
 
   res.on('finish', common.mustCall(() => {
-    assert.doesNotThrow(() => res.destroy(nextError));
+    res.destroy(nextError);
     process.nextTick(() => {
-      assert.doesNotThrow(() => res.destroy(nextError));
+      res.destroy(nextError);
     });
   }));
 

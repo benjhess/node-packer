@@ -35,15 +35,26 @@ server.once('request', common.mustCall((req, res) => {
   // write should accept buffer
   res.write(Buffer.from('asdf'));
 
+  const expectedError = {
+    code: 'ERR_INVALID_ARG_TYPE',
+    name: 'TypeError [ERR_INVALID_ARG_TYPE]',
+  };
+
   // write should not accept an Array
-  assert.throws(function() {
-    res.write(['array']);
-  }, TypeError, 'first argument must be a string or Buffer');
+  assert.throws(
+    () => {
+      res.write(['array']);
+    },
+    expectedError
+  );
 
   // end should not accept an Array
-  assert.throws(function() {
-    res.end(['moo']);
-  }, TypeError, 'first argument must be a string or Buffer');
+  assert.throws(
+    () => {
+      res.end(['moo']);
+    },
+    expectedError
+  );
 
   // end should accept string
   res.end('string');
@@ -51,10 +62,10 @@ server.once('request', common.mustCall((req, res) => {
 
 server.listen(0, function() {
   // just make a request, other tests handle responses
-  http.get({ port: this.address().port }, function(res) {
+  http.get({ port: this.address().port }, (res) => {
     res.resume();
     // do it again to test .end(Buffer);
-    http.get({ port: server.address().port }, function(res) {
+    http.get({ port: server.address().port }, (res) => {
       res.resume();
       server.close();
     });
